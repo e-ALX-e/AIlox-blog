@@ -1,10 +1,11 @@
 import 'server-only'
 
+import type { Transporter } from 'nodemailer'
 import { after } from 'next/server'
 import nodemailer from 'nodemailer'
 import { serverEnv } from '@/config/env/server-env'
 
-let mailTransporter: nodemailer.Transporter | null = null
+let mailTransporter: Transporter | null = null
 
 const smtpConnectionTimeout = 8000
 const smtpGreetingTimeout = 8000

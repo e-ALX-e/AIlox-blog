@@ -1,6 +1,5 @@
 import { Edit2, Eye, Trash } from 'lucide-react'
 import Link from 'next/link'
-import { defaultLanguage } from '@/lib/i18n/config'
 import { cn } from '@/lib/utils/common/shadcn'
 import { useModalActions } from '@/store/use-modal-store'
 import { Button, buttonVariants } from '@/ui/shadcn/button'
@@ -19,8 +18,9 @@ export default function ActionButtons({
   return (
     <section className="flex items-center gap-1">
       <Link
-        href={`/${defaultLanguage}/blog/${slug}`}
+        href={`/blog/${slug}`}
         className={cn(buttonVariants({ variant: 'outline', className: 'size-8' }))}
+        target="_blank"
       >
         <Eye className="size-4" />
       </Link>

@@ -20,7 +20,7 @@ import { Combobox } from '@/ui/shadcn/combobox'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/ui/shadcn/form'
 import { Input } from '@/ui/shadcn/input'
 import MarkdownEditor from './markdown-editor'
-import { ArticleSchema } from './type'
+import { articleSchema } from './type'
 import { useMarkdownAutoSave } from './use-markdown-auto-save'
 
 function syncMarkdownTitle(content: string, title: string): string {
@@ -69,7 +69,7 @@ function updateTitleFromMarkdown(form: UseFormReturn<ArticleDTO>, content: strin
   }
 }
 
-export const AdminArticleEditPage: FC<{
+export const BlogEditForm: FC<{
   article: typeof blogs.$inferSelect | null
   relatedArticleTagNames?: string[]
 }> = ({ article, relatedArticleTagNames }) => {
@@ -100,7 +100,7 @@ export const AdminArticleEditPage: FC<{
   })
 
   const form = useForm<ArticleDTO>({
-    resolver: zodResolver(ArticleSchema),
+    resolver: zodResolver(articleSchema),
     defaultValues: {
       title: article?.title ?? '',
       slug: article?.slug ?? '',

@@ -1,13 +1,11 @@
 import { z } from 'zod'
 
-// * import from https://github.com/aifuxi/fuxiaochen/blob/master/constants/regex.ts
-
-const REGEX = {
-  SLUG: /^[a-z0-9-]+$/,
-  PURE_NUMBERS: /\d+/g,
+const regex = {
+  slug: /^[a-z0-9-]+$/,
+  pureNumbers: /\d+/g,
 }
 
-export const ArticleSchema = z.object({
+export const articleSchema = z.object({
   title: z
     .string()
     .trim()
@@ -16,7 +14,7 @@ export const ArticleSchema = z.object({
   slug: z
     .string()
     .trim()
-    .regex(REGEX.SLUG, {
+    .regex(regex.slug, {
       message: '只允许输入数字、小写字母和中横线',
     })
     .min(1, { message: '长度不能少于1个字符' }),
@@ -25,4 +23,4 @@ export const ArticleSchema = z.object({
   content: z.string(),
 })
 
-export type ArticleDTO = z.infer<typeof ArticleSchema>
+export type ArticleDTO = z.infer<typeof articleSchema>

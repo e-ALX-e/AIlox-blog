@@ -2,7 +2,16 @@ import 'server-only'
 
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { serverEnv } from '@/config/env/server-env'
-import * as relations from './relations'
+import {
+  accountRelations,
+  blogsRelations,
+  blogTagsRelations,
+  blogToBlogTagRelations,
+  sessionRelations,
+  siteCommentsRelations,
+  userRelations,
+  walletAddressRelations,
+} from './relations'
 import * as schema from './schema'
 
 const normalizeConnectionString = (connectionString: string) => {
@@ -20,6 +29,13 @@ const normalizeConnectionString = (connectionString: string) => {
 export const db = drizzle(normalizeConnectionString(serverEnv.DATABASE_URL), {
   schema: {
     ...schema,
-    ...relations,
+    accountRelations,
+    blogsRelations,
+    blogTagsRelations,
+    blogToBlogTagRelations,
+    sessionRelations,
+    siteCommentsRelations,
+    userRelations,
+    walletAddressRelations,
   },
 })

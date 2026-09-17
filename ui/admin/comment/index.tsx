@@ -15,7 +15,7 @@ export const CommentPage: FC<ComponentProps<'main'>> = () => {
   const pendingCount = pendingCountData?.siteCommentPendingCount ?? 0
 
   return (
-    <main className="flex h-full min-h-0 w-full flex-1 flex-col gap-2">
+    <main className="flex h-[calc(100dvh-5rem)] min-h-0 w-full flex-col gap-2 pb-4">
       <header className="flex flex-wrap items-center gap-2">
         <div className="relative inline-flex overflow-visible">
           <Button

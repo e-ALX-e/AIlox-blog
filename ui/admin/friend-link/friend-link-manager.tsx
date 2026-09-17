@@ -202,7 +202,7 @@ export const FriendLinkManager: FC<ComponentProps<'main'>> = () => {
 
   return (
     <>
-      <main className="flex h-full min-h-0 w-full flex-1 flex-col gap-2 overflow-hidden">
+      <main className="flex min-h-0 w-full flex-1 flex-col gap-2 overflow-hidden">
         <FriendLinkFilters
           draftQuery={draftQuery}
           draftState={draftState}
@@ -220,7 +220,7 @@ export const FriendLinkManager: FC<ComponentProps<'main'>> = () => {
         ) : friendLinks.length === 0 ? (
           <div className="m-auto text-muted-foreground">虚无。</div>
         ) : (
-          <main className="flex max-h-[74vh] min-h-0 flex-1 overflow-y-auto bg-card [scrollbar-color:rgba(113,113,122,0.45)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-500/45 dark:[&::-webkit-scrollbar-thumb]:bg-zinc-400/35 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:w-[3px]">
+          <main className="flex min-h-0 flex-1 overflow-y-auto bg-card [scrollbar-color:rgba(113,113,122,0.45)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-500/45 dark:[&::-webkit-scrollbar-thumb]:bg-zinc-400/35 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:w-[3px]">
             <ul className="w-full space-y-2">
               {friendLinks.map(friendLink => (
                 <FriendLinkListItem

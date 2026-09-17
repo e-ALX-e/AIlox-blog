@@ -1,22 +1,23 @@
 import 'server-only'
 
-import type { SiteCommentTargetType } from '@prisma/client'
 import type { CommentTarget } from './type'
+import { eq, inArray } from 'drizzle-orm'
+import { db } from '@/db/instance'
+import { blogs, type siteCommentTargetTypeEnum } from '@/db/schema'
 import { defaultLanguage } from '@/lib/i18n/config'
-import { prisma } from '@/prisma/instance'
 
-export const getSiteCommentTargetKey = (targetType: SiteCommentTargetType, targetId: number) =>
-  `${targetType}:${targetId}`
+export const getSiteCommentTargetKey = (
+  targetType: (typeof siteCommentTargetTypeEnum.enumValues)[number],
+  targetId: number,
+) => `${targetType}:${targetId}`
 
 export async function getSiteCommentTarget(
-  targetType: SiteCommentTargetType,
+  targetType: (typeof siteCommentTargetTypeEnum.enumValues)[number],
   targetId: number,
 ): Promise<CommentTarget | null> {
-  const blog = await prisma.blog.findUnique({
-    where: {
-      id: targetId,
-    },
-    select: {
+  const blog = await db.query.blogs.findFirst({
+    where: eq(blogs.id, targetId),
+    columns: {
       id: true,
       title: true,
       slug: true,
@@ -37,7 +38,7 @@ export async function getSiteCommentTarget(
 
 export async function getSiteCommentTargetMap(
   targets: Array<{
-    targetType: SiteCommentTargetType
+    targetType: (typeof siteCommentTargetTypeEnum.enumValues)[number]
     targetId: number
   }>,
 ) {
@@ -49,16 +50,12 @@ export async function getSiteCommentTargetMap(
 
   const blogIds = Array.from(blogIdSet)
 
-  const blogs =
+  const blogList =
     blogIds.length === 0
       ? []
-      : await prisma.blog.findMany({
-          where: {
-            id: {
-              in: blogIds,
-            },
-          },
-          select: {
+      : await db.query.blogs.findMany({
+          where: inArray(blogs.id, blogIds),
+          columns: {
             id: true,
             title: true,
             slug: true,
@@ -68,7 +65,7 @@ export async function getSiteCommentTargetMap(
 
   const map = new Map<string, CommentTarget>()
 
-  for (const blog of blogs) {
+  for (const blog of blogList) {
     map.set(getSiteCommentTargetKey('BLOG', blog.id), {
       ...blog,
       targetType: 'BLOG',

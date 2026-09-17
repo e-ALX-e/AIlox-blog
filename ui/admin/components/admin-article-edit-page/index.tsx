@@ -1,7 +1,7 @@
 'use client'
 
-import type { Blog } from '@prisma/client'
 import type { UseFormReturn } from 'react-hook-form'
+import type { blogs } from '@/db/schema'
 import type { ArticleDTO } from './type'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -70,7 +70,7 @@ function updateTitleFromMarkdown(form: UseFormReturn<ArticleDTO>, content: strin
 }
 
 export const AdminArticleEditPage: FC<{
-  article: Blog | null
+  article: typeof blogs.$inferSelect | null
   relatedArticleTagNames?: string[]
 }> = ({ article, relatedArticleTagNames }) => {
   const { push } = useRouter()

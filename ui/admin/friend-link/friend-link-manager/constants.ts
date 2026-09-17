@@ -44,7 +44,7 @@ export const friendLinkEditFields = [
   },
   {
     name: 'email',
-    label: '联系邮箱',
+    label: '联系邮箱（可选）',
     type: 'email',
   },
   {

@@ -11,7 +11,7 @@ export default {
       'ui/shadcn/**',
       'lib/core/sound/**',
       'next-sitemap.config.js',
-      'prisma/schema.prisma',
+      'db/schema.ts',
     ],
     overrides: [
       {

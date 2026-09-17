@@ -1,8 +1,9 @@
+import { db } from '@/db/instance'
+import { siteCommentConfig } from '@/db/schema'
 import { BadRequestError } from '@/lib/common/errors/request'
 import { isTrustedRequestOrigin, noPermission } from '@/lib/core/auth/guard'
 import { readJsonBody } from '@/lib/infra/http/read-json-body'
 import { withResponse } from '@/lib/infra/http/with-response'
-import { prisma } from '@/prisma/instance'
 import { updateCommentConfigSchema } from './schema'
 
 const siteCommentConfigId = 1
@@ -11,37 +12,23 @@ const defaultSiteCommentConfig = {
   autoApproveWalletUsers: false,
 }
 
-const isMissingTableError = (error: unknown) =>
-  typeof error === 'object' &&
-  error !== null &&
-  'code' in error &&
-  (error as { code?: unknown }).code === 'P2021'
-
 export const POST = withResponse(async request => {
   if (!isTrustedRequestOrigin(request) || (await noPermission())) {
     throw new BadRequestError('Insufficient permissions.')
   }
 
-  let config: Awaited<ReturnType<typeof prisma.siteCommentConfig.upsert>>
-
-  try {
-    config = await prisma.siteCommentConfig.upsert({
-      where: {
-        id: siteCommentConfigId,
-      },
-      create: {
-        id: siteCommentConfigId,
-        ...defaultSiteCommentConfig,
-      },
-      update: {},
+  const [config] = await db
+    .insert(siteCommentConfig)
+    .values({
+      id: siteCommentConfigId,
+      ...defaultSiteCommentConfig,
+      updatedAt: new Date(),
     })
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      throw new BadRequestError('Comment system is not initialized. Please run Prisma migration.')
-    }
-
-    throw error
-  }
+    .onConflictDoUpdate({
+      target: siteCommentConfig.id,
+      set: { id: siteCommentConfigId },
+    })
+    .returning()
 
   return {
     data: config,
@@ -62,26 +49,21 @@ export const PATCH = withResponse(async request => {
 
   const payload = parseResult.data
 
-  let updated: Awaited<ReturnType<typeof prisma.siteCommentConfig.upsert>>
-
-  try {
-    updated = await prisma.siteCommentConfig.upsert({
-      where: {
-        id: siteCommentConfigId,
-      },
-      create: {
-        id: siteCommentConfigId,
-        ...payload,
-      },
-      update: payload,
+  const [updated] = await db
+    .insert(siteCommentConfig)
+    .values({
+      id: siteCommentConfigId,
+      ...payload,
+      updatedAt: new Date(),
     })
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      throw new BadRequestError('Comment system is not initialized. Please run Prisma migration.')
-    }
-
-    throw error
-  }
+    .onConflictDoUpdate({
+      target: siteCommentConfig.id,
+      set: {
+        ...payload,
+        updatedAt: new Date(),
+      },
+    })
+    .returning()
 
   return {
     message: 'Updated.',

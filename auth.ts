@@ -1,11 +1,14 @@
+import 'server-only'
+
 import { betterAuth } from 'better-auth'
-import { prismaAdapter } from 'better-auth/adapters/prisma'
+import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { customSession, siwe } from 'better-auth/plugins'
 import { getAddress, verifyMessage as verifyViemMessage } from 'viem'
 import { generateSiweNonce } from 'viem/siwe'
 import { serverEnv } from '@/config/env/server-env'
+import { db } from '@/db/instance'
+import * as schema from '@/db/schema'
 import { isAdminUser } from '@/lib/core/auth/admin'
-import { prisma } from '@/prisma/instance'
 
 export const trustedOrigins = [serverEnv.SITE_URL]
 
@@ -24,8 +27,9 @@ const socialProviders = {
 
 export const auth = betterAuth({
   baseURL: serverEnv.SITE_URL,
-  database: prismaAdapter(prisma, {
-    provider: 'postgresql',
+  database: drizzleAdapter(db, {
+    provider: 'pg',
+    schema,
   }),
   socialProviders,
   trustedOrigins,

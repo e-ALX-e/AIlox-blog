@@ -1,11 +1,13 @@
+import { count, desc, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
+import { db } from '@/db/instance'
+import { friendLinks } from '@/db/schema'
 import { BadRequestError } from '@/lib/common/errors/request'
 import { languages } from '@/lib/i18n/config'
 import { notifyAdminFriendLinkApplication } from '@/lib/infra/email/notifications'
 import { sendEmailInBackground } from '@/lib/infra/email/send-email'
 import { readJsonBody } from '@/lib/infra/http/read-json-body'
 import { withResponse } from '@/lib/infra/http/with-response'
-import { prisma } from '@/prisma/instance'
 import { createFriendLinkSchema, getPublicFriendLinksQuerySchema } from './schema'
 
 export const GET = withResponse(async request => {
@@ -19,35 +21,28 @@ export const GET = withResponse(async request => {
   }
 
   const { take, skip } = queryResult.data
-  const where = {
-    state: 'APPROVED' as const,
-  }
-
   const [list, total] = await Promise.all([
-    prisma.friendLink.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        avatarUrl: true,
-        siteUrl: true,
-        state: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-      orderBy: [
-        {
-          updatedAt: 'desc',
-        },
-        {
-          id: 'desc',
-        },
-      ],
-      take,
-      skip,
-    }),
-    prisma.friendLink.count({ where }),
+    db
+      .select({
+        id: friendLinks.id,
+        name: friendLinks.name,
+        description: friendLinks.description,
+        avatarUrl: friendLinks.avatarUrl,
+        siteUrl: friendLinks.siteUrl,
+        state: friendLinks.state,
+        createdAt: friendLinks.createdAt,
+        updatedAt: friendLinks.updatedAt,
+      })
+      .from(friendLinks)
+      .where(eq(friendLinks.state, 'APPROVED'))
+      .orderBy(desc(friendLinks.updatedAt), desc(friendLinks.id))
+      .limit(take)
+      .offset(skip),
+    db
+      .select({ value: count() })
+      .from(friendLinks)
+      .where(eq(friendLinks.state, 'APPROVED'))
+      .then(([result]) => result.value),
   ])
 
   return {
@@ -66,12 +61,14 @@ export const POST = withResponse(async request => {
     throw new BadRequestError('Invalid request body.', { data: parseResult.error.flatten() })
   }
 
-  const created = await prisma.friendLink.create({
-    data: {
+  const [created] = await db
+    .insert(friendLinks)
+    .values({
       ...parseResult.data,
       state: 'PENDING',
-    },
-  })
+      updatedAt: new Date(),
+    })
+    .returning()
 
   for (const language of languages) {
     revalidatePath(`/${language}/friends`)

@@ -1,6 +1,8 @@
+import { and, desc, eq, like } from 'drizzle-orm'
+import { db } from '@/db/instance'
+import { blogs } from '@/db/schema'
 import { BadRequestError } from '@/lib/common/errors/request'
 import { withResponse } from '@/lib/infra/http/with-response'
-import { prisma } from '@/prisma/instance'
 import { getPublicBlogsQuerySchema } from './schema'
 
 export const GET = withResponse(async request => {
@@ -13,30 +15,32 @@ export const GET = withResponse(async request => {
   }
 
   const { q } = queryResult.data
-  const where = {
-    isPublished: true,
-    ...(q != null && q.length > 0
-      ? {
-          title: {
-            contains: q,
-          },
-        }
-      : {}),
-  }
-
-  return await prisma.blog.findMany({
-    where,
-    orderBy: {
-      createdAt: 'desc',
-    },
-    select: {
+  const records = await db.query.blogs.findMany({
+    where: and(
+      eq(blogs.isPublished, true),
+      q != null && q.length > 0 ? like(blogs.title, `%${q}%`) : undefined,
+    ),
+    orderBy: desc(blogs.createdAt),
+    columns: {
       id: true,
       slug: true,
       title: true,
       isPublished: true,
       createdAt: true,
       updatedAt: true,
-      tags: true,
+    },
+    with: {
+      tagLinks: {
+        columns: {},
+        with: {
+          tag: true,
+        },
+      },
     },
   })
+
+  return records.map(({ tagLinks, ...blog }) => ({
+    ...blog,
+    tags: tagLinks.map(link => link.tag),
+  }))
 })

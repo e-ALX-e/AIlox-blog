@@ -1,3 +1,6 @@
+import { and, count, desc, eq, inArray } from 'drizzle-orm'
+import { db } from '@/db/instance'
+import { account, siteCommentConfig, siteComments } from '@/db/schema'
 import { getSiteCommentTarget } from '@/lib/api/comment/target'
 import { BadRequestError } from '@/lib/common/errors/request'
 import { isAdminUser, isWalletSessionUser, requireSignedInUser } from '@/lib/core/auth/guard'
@@ -9,7 +12,6 @@ import {
 import { sendEmailInBackground } from '@/lib/infra/email/send-email'
 import { readJsonBody } from '@/lib/infra/http/read-json-body'
 import { withResponse } from '@/lib/infra/http/with-response'
-import { prisma } from '@/prisma/instance'
 import {
   createCommentSchema,
   deleteCommentQuerySchema,
@@ -24,90 +26,73 @@ const defaultSiteCommentConfig = {
 const deletedCommentText = '已删除'
 const commentLoginProviderIds = ['github', 'google']
 
-type PublicCommentUserRecord = {
-  id: string
-  name: string
-  email: string
-  image: string | null
-  accounts: {
-    providerId: string
-    accountId: string
-  }[]
-}
-
-type PublicCommentParentRecord = {
-  id: number
-  userId: string | null
-  authorName: string
-  authorImage: string | null
-  isDeleted: boolean
-  user: PublicCommentUserRecord | null
-}
-
-type PublicCommentRecord = {
-  id: number
-  targetType: 'BLOG'
-  targetId: number
-  parentId: number | null
-  userId: string | null
-  authorName: string
-  authorImage: string | null
-  content: string
-  isDeleted: boolean
-  state: 'PENDING' | 'APPROVED' | 'REJECTED'
-  createdAt: Date
-  updatedAt: Date
-  user: PublicCommentUserRecord | null
-  parent: PublicCommentParentRecord | null
-}
-
-const publicCommentUserSelect = {
-  id: true,
-  name: true,
-  email: true,
-  image: true,
-  accounts: {
-    where: {
-      providerId: {
-        in: commentLoginProviderIds,
+const publicCommentUserRelation = {
+  columns: {
+    id: true,
+    name: true,
+    email: true,
+    image: true,
+  },
+  with: {
+    accounts: {
+      where: inArray(account.providerId, commentLoginProviderIds),
+      columns: {
+        providerId: true,
+        accountId: true,
       },
-    },
-    select: {
-      providerId: true,
-      accountId: true,
     },
   },
 } as const
 
-const publicCommentInclude = {
-  user: {
-    select: publicCommentUserSelect,
-  },
+const publicCommentRelations = {
+  user: publicCommentUserRelation,
   parent: {
-    select: {
+    columns: {
       id: true,
       userId: true,
       authorName: true,
       authorImage: true,
       isDeleted: true,
-      user: {
-        select: publicCommentUserSelect,
-      },
+    },
+    with: {
+      user: publicCommentUserRelation,
     },
   },
 } as const
 
-const serializePublicCommentUser = (user: PublicCommentUserRecord) => ({
+const getPublicSiteCommentList = (
+  targetType: 'BLOG',
+  targetId: number,
+  take: number,
+  skip: number,
+) =>
+  db.query.siteComments.findMany({
+    where: and(
+      eq(siteComments.targetType, targetType),
+      eq(siteComments.targetId, targetId),
+      eq(siteComments.state, 'APPROVED'),
+    ),
+    with: publicCommentRelations,
+    orderBy: desc(siteComments.createdAt),
+    limit: take,
+    offset: skip,
+  })
+
+const serializePublicCommentUser = (
+  user: NonNullable<Awaited<ReturnType<typeof getPublicSiteCommentList>>[number]['user']>,
+) => ({
   id: user.id,
   name: user.name,
   image: user.image,
-  accounts: user.accounts.map(account => ({
-    providerId: account.providerId,
-    accountId: account.accountId,
+  accounts: user.accounts.map(accountRecord => ({
+    providerId: accountRecord.providerId,
+    accountId: accountRecord.accountId,
   })),
 })
 
-const serializePublicCommentParent = (comment: PublicCommentParentRecord) => {
+const serializePublicCommentParent = (
+  comment: NonNullable<Awaited<ReturnType<typeof getPublicSiteCommentList>>[number]['parent']>,
+) => {
   return {
     id: comment.id,
     userId: comment.userId,
@@ -119,7 +104,9 @@ const serializePublicCommentParent = (comment: PublicCommentParentRecord) => {
   }
 }
 
-const serializePublicComment = async (comment: PublicCommentRecord) => {
+const serializePublicComment = async (
+  comment: Awaited<ReturnType<typeof getPublicSiteCommentList>>[number],
+) => {
   const content = comment.isDeleted ? deletedCommentText : comment.content
   const sanitizedHtmlContent = comment.isDeleted
     ? deletedCommentText
@@ -145,37 +132,24 @@ const serializePublicComment = async (comment: PublicCommentRecord) => {
   }
 }
 
-const isMissingTableError = (error: unknown) =>
-  typeof error === 'object' &&
-  error !== null &&
-  'code' in error &&
-  (error as { code?: unknown }).code === 'P2021'
-
 const getSiteCommentPolicy = async () => {
-  try {
-    const config = await prisma.siteCommentConfig.findUnique({
-      where: {
-        id: siteCommentConfigId,
-      },
-      select: {
-        autoApproveEmailUsers: true,
-        autoApproveWalletUsers: true,
-      },
+  const [config] = await db
+    .insert(siteCommentConfig)
+    .values({
+      id: siteCommentConfigId,
+      ...defaultSiteCommentConfig,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: siteCommentConfig.id,
+      set: { id: siteCommentConfigId },
+    })
+    .returning({
+      autoApproveEmailUsers: siteCommentConfig.autoApproveEmailUsers,
+      autoApproveWalletUsers: siteCommentConfig.autoApproveWalletUsers,
     })
 
-    return {
-      autoApproveEmailUsers:
-        config?.autoApproveEmailUsers ?? defaultSiteCommentConfig.autoApproveEmailUsers,
-      autoApproveWalletUsers:
-        config?.autoApproveWalletUsers ?? defaultSiteCommentConfig.autoApproveWalletUsers,
-    }
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      return defaultSiteCommentConfig
-    }
-
-    throw error
-  }
+  return config
 }
 
 export const GET = withResponse(async request => {
@@ -202,44 +176,20 @@ export const GET = withResponse(async request => {
     }
   }
 
-  const where = {
-    targetType,
-    targetId,
-    state: 'APPROVED' as const,
-  }
-
-  const getPublicSiteCommentList = () =>
-    prisma.siteComment.findMany({
-      where,
-      include: publicCommentInclude,
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take,
-      skip,
-    })
-
-  let rawList: Awaited<ReturnType<typeof getPublicSiteCommentList>>
-  let total: number
-
-  try {
-    ;[rawList, total] = await Promise.all([
-      getPublicSiteCommentList(),
-      prisma.siteComment.count({ where }),
-    ])
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      return {
-        list: [],
-        total: 0,
-        take,
-        skip,
-      }
-    }
-
-    throw error
-  }
-
+  const [rawList, total] = await Promise.all([
+    getPublicSiteCommentList(targetType, targetId, take, skip),
+    db
+      .select({ value: count() })
+      .from(siteComments)
+      .where(
+        and(
+          eq(siteComments.targetType, targetType),
+          eq(siteComments.targetId, targetId),
+          eq(siteComments.state, 'APPROVED'),
+        ),
+      )
+      .then(([result]) => result.value),
+  ])
   const list = await Promise.all(rawList.map(serializePublicComment))
 
   return {
@@ -273,19 +223,17 @@ export const POST = withResponse(async request => {
   const parentComment =
     payload.parentId == null
       ? null
-      : await prisma.siteComment.findUnique({
-          where: {
-            id: payload.parentId,
-          },
-          select: {
+      : await db.query.siteComments.findFirst({
+          where: eq(siteComments.id, payload.parentId),
+          columns: {
             id: true,
             targetType: true,
             targetId: true,
             authorName: true,
             state: true,
-            user: {
-              select: publicCommentUserSelect,
-            },
+          },
+          with: {
+            user: publicCommentUserRelation,
           },
         })
 
@@ -313,29 +261,33 @@ export const POST = withResponse(async request => {
   const currentUserIsAdmin = isAdminUser(user)
   const autoApprove = currentUserIsAdmin || autoApproveByPolicy
 
-  let created: PublicCommentRecord
-
-  try {
-    created = await prisma.siteComment.create({
-      data: {
+  const created = await db.transaction(async transaction => {
+    const [createdComment] = await transaction
+      .insert(siteComments)
+      .values({
         targetType: payload.targetType,
         targetId: payload.targetId,
         parentId: payload.parentId ?? null,
         userId: user.id,
-        authorName: user.name || user.email || 'Anonymous',
+        authorName: user.name,
         authorImage: user.image,
         content: payload.content,
         state: autoApprove ? 'APPROVED' : 'PENDING',
-      },
-      include: publicCommentInclude,
+        updatedAt: new Date(),
+      })
+      .returning({ id: siteComments.id })
+
+    const record = await transaction.query.siteComments.findFirst({
+      where: eq(siteComments.id, createdComment.id),
+      with: publicCommentRelations,
     })
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      throw new BadRequestError('Comment system is not initialized. Please run Prisma migration.')
+
+    if (record == null) {
+      throw new Error('Created comment could not be loaded.')
     }
 
-    throw error
-  }
+    return record
+  })
 
   const shouldNotifyAdmin = !currentUserIsAdmin || payload.parentId == null
 
@@ -394,11 +346,9 @@ export const DELETE = withResponse(async request => {
   }
 
   const { id } = queryResult.data
-  const existing = await prisma.siteComment.findUnique({
-    where: {
-      id,
-    },
-    select: {
+  const existing = await db.query.siteComments.findFirst({
+    where: eq(siteComments.id, id),
+    columns: {
       id: true,
       userId: true,
     },
@@ -412,14 +362,13 @@ export const DELETE = withResponse(async request => {
     throw new BadRequestError('只能删除自己的评论。')
   }
 
-  await prisma.siteComment.update({
-    where: {
-      id,
-    },
-    data: {
+  await db
+    .update(siteComments)
+    .set({
       isDeleted: true,
-    },
-  })
+      updatedAt: new Date(),
+    })
+    .where(eq(siteComments.id, id))
 
   return {
     message: 'Deleted.',

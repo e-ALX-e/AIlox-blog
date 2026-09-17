@@ -1,17 +1,19 @@
 import type { Metadata } from 'next'
+import { and, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { seoMetadata } from '@/config/seo'
+import { db } from '@/db/instance'
+import { blogs } from '@/db/schema'
 import { getRouteLanguage } from '@/lib/i18n/get-route-language'
-import { prisma } from '@/prisma/instance'
 import { BlogDetail } from '@/ui/(main)/blog/[slug]'
 
 export async function generateStaticParams() {
-  const blogs = await prisma.blog.findMany({
-    where: { isPublished: true },
-    select: { slug: true },
-  })
+  const publishedBlogs = await db
+    .select({ slug: blogs.slug })
+    .from(blogs)
+    .where(eq(blogs.isPublished, true))
 
-  return blogs.map(blog => ({ slug: blog.slug }))
+  return publishedBlogs.map(blog => ({ slug: blog.slug }))
 }
 
 export async function generateMetadata({
@@ -21,9 +23,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { language: languageParam, slug } = await params
   const language = getRouteLanguage(languageParam)
-  const blog = await prisma.blog.findUnique({
-    where: { slug },
-    select: { title: true },
+  const blog = await db.query.blogs.findFirst({
+    where: and(eq(blogs.slug, slug), eq(blogs.isPublished, true)),
+    columns: { title: true },
   })
 
   if (blog == null) {

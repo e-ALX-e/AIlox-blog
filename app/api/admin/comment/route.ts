@@ -1,3 +1,6 @@
+import { and, count, desc, eq, like } from 'drizzle-orm'
+import { db } from '@/db/instance'
+import { siteComments } from '@/db/schema'
 import {
   getSiteCommentTarget,
   getSiteCommentTargetKey,
@@ -9,55 +12,49 @@ import { notifyCommentAuthorReply } from '@/lib/infra/email/notifications'
 import { sendEmailInBackground } from '@/lib/infra/email/send-email'
 import { readJsonBody } from '@/lib/infra/http/read-json-body'
 import { withResponse } from '@/lib/infra/http/with-response'
-import { prisma } from '@/prisma/instance'
 import {
   deleteCommentQuerySchema,
   getAdminCommentsQuerySchema,
   updateCommentSchema,
 } from './schema'
 
-type AdminCommentUserRecord = {
-  id: string
-  name: string
-  email: string
-  image: string | null
-}
-
-type AdminCommentParentRecord = {
-  id: number
-  userId: string | null
-  authorName: string
-  authorImage: string | null
-  isDeleted: boolean
-  user: AdminCommentUserRecord | null
-}
-
-const adminCommentUserSelect = {
-  id: true,
-  name: true,
-  email: true,
-  image: true,
+const adminCommentUserRelation = {
+  columns: {
+    id: true,
+    name: true,
+    email: true,
+    image: true,
+  },
 } as const
 
-const adminCommentInclude = {
-  user: {
-    select: adminCommentUserSelect,
-  },
+const adminCommentRelations = {
+  user: adminCommentUserRelation,
   parent: {
-    select: {
+    columns: {
       id: true,
       userId: true,
       authorName: true,
       authorImage: true,
       isDeleted: true,
-      user: {
-        select: adminCommentUserSelect,
-      },
+    },
+    with: {
+      user: adminCommentUserRelation,
     },
   },
 } as const
 
-const serializeAdminCommentParent = (comment: AdminCommentParentRecord) => ({
+const getAdminSiteCommentList = (where: ReturnType<typeof and>, take: number, skip: number) =>
+  db.query.siteComments.findMany({
+    where,
+    with: adminCommentRelations,
+    orderBy: desc(siteComments.createdAt),
+    limit: take,
+    offset: skip,
+  })
+
+const serializeAdminCommentParent = (
+  comment: NonNullable<Awaited<ReturnType<typeof getAdminSiteCommentList>>[number]['parent']>,
+) => ({
   id: comment.id,
   userId: comment.userId,
   isAdmin: isAdminUser(comment.user),
@@ -73,12 +70,6 @@ const serializeAdminCommentParent = (comment: AdminCommentParentRecord) => ({
           image: comment.user.image,
         },
 })
-
-const isMissingTableError = (error: unknown) =>
-  typeof error === 'object' &&
-  error !== null &&
-  'code' in error &&
-  (error as { code?: unknown }).code === 'P2021'
 
 export const GET = withResponse(async request => {
   if (await noPermission()) {
@@ -100,56 +91,24 @@ export const GET = withResponse(async request => {
   }
 
   const { q, targetType, targetId, state, isDeleted, take, skip } = queryResult.data
+  const where = and(
+    eq(siteComments.targetType, 'BLOG'),
+    q != null && q.length > 0 ? like(siteComments.content, `%${q}%`) : undefined,
+    targetType != null ? eq(siteComments.targetType, targetType) : undefined,
+    targetId != null ? eq(siteComments.targetId, targetId) : undefined,
+    state != null ? eq(siteComments.state, state) : undefined,
+    isDeleted != null ? eq(siteComments.isDeleted, isDeleted) : undefined,
+  )
 
-  const where = {
-    targetType: 'BLOG' as const,
-    ...(q != null && q.length > 0
-      ? {
-          content: {
-            contains: q,
-          },
-        }
-      : {}),
-    ...(targetType != null ? { targetType } : {}),
-    ...(targetId != null ? { targetId } : {}),
-    ...(state != null ? { state } : {}),
-    ...(isDeleted != null ? { isDeleted } : {}),
-  }
-
-  const getAdminSiteCommentList = () =>
-    prisma.siteComment.findMany({
-      where,
-      include: adminCommentInclude,
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take,
-      skip,
-    })
-
-  let rawList: Awaited<ReturnType<typeof getAdminSiteCommentList>>
-  let total: number
-
-  try {
-    ;[rawList, total] = await Promise.all([
-      getAdminSiteCommentList(),
-      prisma.siteComment.count({ where }),
-    ])
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      return {
-        list: [],
-        total: 0,
-        take,
-        skip,
-      }
-    }
-
-    throw error
-  }
-
+  const [rawList, total] = await Promise.all([
+    getAdminSiteCommentList(where, take, skip),
+    db
+      .select({ value: count() })
+      .from(siteComments)
+      .where(where)
+      .then(([result]) => result.value),
+  ])
   const targetMap = await getSiteCommentTargetMap(rawList)
-
   const list = rawList.map(comment => ({
     ...comment,
     parent: comment.parent == null ? null : serializeAdminCommentParent(comment.parent),
@@ -177,36 +136,23 @@ export const PATCH = withResponse(async request => {
   }
 
   const payload = parseResult.data
-
-  let existing: Awaited<ReturnType<typeof prisma.siteComment.findUnique>>
-
-  try {
-    existing = await prisma.siteComment.findUnique({
-      where: {
-        id: payload.id,
-      },
-    })
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      throw new BadRequestError('Comment system is not initialized. Please run Prisma migration.')
-    }
-
-    throw error
-  }
+  const existing = await db.query.siteComments.findFirst({
+    where: eq(siteComments.id, payload.id),
+  })
 
   if (existing == null) {
     throw new BadRequestError('Comment not found.', { data: { id: payload.id } })
   }
 
   if ('isDeleted' in payload) {
-    const updated = await prisma.siteComment.update({
-      where: {
-        id: payload.id,
-      },
-      data: {
+    const [updated] = await db
+      .update(siteComments)
+      .set({
         isDeleted: payload.isDeleted,
-      },
-    })
+        updatedAt: new Date(),
+      })
+      .where(eq(siteComments.id, payload.id))
+      .returning()
 
     return {
       message: 'Updated.',
@@ -214,42 +160,32 @@ export const PATCH = withResponse(async request => {
     }
   }
 
-  let updated: Awaited<ReturnType<typeof prisma.siteComment.update>>
-
-  try {
-    updated = await prisma.siteComment.update({
-      where: {
-        id: payload.id,
-      },
-      data: {
-        state: payload.state,
-      },
+  const [updated] = await db
+    .update(siteComments)
+    .set({
+      state: payload.state,
+      updatedAt: new Date(),
     })
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      throw new BadRequestError('Comment system is not initialized. Please run Prisma migration.')
-    }
-
-    throw error
-  }
+    .where(eq(siteComments.id, payload.id))
+    .returning()
 
   if (existing.state !== 'APPROVED' && updated.state === 'APPROVED' && updated.parentId != null) {
-    const approvedReply = await prisma.siteComment.findUnique({
-      where: {
-        id: updated.id,
-      },
-      select: {
+    const approvedReply = await db.query.siteComments.findFirst({
+      where: eq(siteComments.id, updated.id),
+      columns: {
         content: true,
         authorName: true,
         userId: true,
         targetType: true,
         targetId: true,
+      },
+      with: {
         parent: {
-          select: {
+          columns: {
             authorName: true,
-            user: {
-              select: adminCommentUserSelect,
-            },
+          },
+          with: {
+            user: adminCommentUserRelation,
           },
         },
       },
@@ -257,22 +193,21 @@ export const PATCH = withResponse(async request => {
     const target = await getSiteCommentTarget(updated.targetType, updated.targetId)
     const approvedReplyParent = approvedReply?.parent
     const parentCommentUser = approvedReplyParent?.user
-    const shouldNotifyReplyAuthor =
+
+    if (
       target != null &&
       target.isPublished &&
+      approvedReply != null &&
+      approvedReplyParent != null &&
       parentCommentUser != null &&
       !isAdminUser(parentCommentUser) &&
       !isWalletSessionUser(parentCommentUser) &&
-      parentCommentUser.id !== approvedReply?.userId
-
-    if (shouldNotifyReplyAuthor && approvedReply != null && approvedReplyParent != null) {
-      const parentCommentUserEmail = parentCommentUser.email
-      const parentCommentAuthorName = approvedReplyParent.authorName
-
+      parentCommentUser.id !== approvedReply.userId
+    ) {
       sendEmailInBackground(() =>
         notifyCommentAuthorReply({
-          to: parentCommentUserEmail,
-          recipientName: parentCommentAuthorName,
+          to: parentCommentUser.email,
+          recipientName: approvedReplyParent.authorName,
           replyAuthorName: approvedReply.authorName,
           targetTitle: target.title,
           targetPath: target.path,
@@ -302,43 +237,21 @@ export const DELETE = withResponse(async request => {
   }
 
   const { id } = queryResult.data
-
-  let existing: Awaited<ReturnType<typeof prisma.siteComment.findUnique>>
-
-  try {
-    existing = await prisma.siteComment.findUnique({
-      where: {
-        id,
-      },
-    })
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      throw new BadRequestError('Comment system is not initialized. Please run Prisma migration.')
-    }
-
-    throw error
-  }
+  const existing = await db.query.siteComments.findFirst({
+    where: eq(siteComments.id, id),
+  })
 
   if (existing == null) {
     throw new BadRequestError('Comment not found.', { data: { id } })
   }
 
-  try {
-    await prisma.siteComment.update({
-      where: {
-        id,
-      },
-      data: {
-        isDeleted: true,
-      },
+  await db
+    .update(siteComments)
+    .set({
+      isDeleted: true,
+      updatedAt: new Date(),
     })
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      throw new BadRequestError('Comment system is not initialized. Please run Prisma migration.')
-    }
-
-    throw error
-  }
+    .where(eq(siteComments.id, id))
 
   return {
     message: 'Deleted.',

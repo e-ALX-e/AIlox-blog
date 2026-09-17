@@ -28,6 +28,11 @@ const friendLinkEmailSchema = z
   .email({ message: '请输入有效的邮箱地址' })
   .max(254, { message: '邮箱地址不能超过 254 个字符' })
 
+const optionalFriendLinkEmailSchema = z.preprocess(
+  value => (typeof value === 'string' && value.trim() === '' ? null : value),
+  friendLinkEmailSchema.nullable().optional(),
+)
+
 export const getAdminFriendLinksQuerySchema = z.object({
   q: z.string().trim().optional(),
   state: friendLinkStateSchema.optional(),
@@ -39,7 +44,7 @@ export const updateFriendLinkSchema = z
   .object({
     id: z.number().int().positive({ message: 'Invalid id.' }),
     name: friendLinkNameSchema.optional(),
-    email: friendLinkEmailSchema.optional(),
+    email: optionalFriendLinkEmailSchema,
     description: friendLinkDescriptionSchema.optional(),
     avatarUrl: friendLinkUrlSchema.optional(),
     siteUrl: friendLinkUrlSchema.optional(),

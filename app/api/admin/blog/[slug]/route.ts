@@ -1,7 +1,9 @@
+import { eq } from 'drizzle-orm'
+import { db } from '@/db/instance'
+import { blogs } from '@/db/schema'
 import { BadRequestError } from '@/lib/common/errors/request'
 import { noPermission } from '@/lib/core/auth/guard'
 import { withResponse } from '@/lib/infra/http/with-response'
-import { prisma } from '@/prisma/instance'
 
 export const GET = withResponse(
   async (_request, { params }: { params: Promise<{ slug: string }> }) => {
@@ -15,13 +17,27 @@ export const GET = withResponse(
       throw new BadRequestError('Invalid slug.', { data: { slug } })
     }
 
-    return await prisma.blog.findUnique({
-      where: {
-        slug,
-      },
-      include: {
-        tags: true,
+    const record = await db.query.blogs.findFirst({
+      where: eq(blogs.slug, slug),
+      with: {
+        tagLinks: {
+          columns: {},
+          with: {
+            tag: true,
+          },
+        },
       },
     })
+
+    if (record == null) {
+      return null
+    }
+
+    const { tagLinks, ...blog } = record
+
+    return {
+      ...blog,
+      tags: tagLinks.map(link => link.tag),
+    }
   },
 )

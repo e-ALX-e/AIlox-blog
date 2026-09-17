@@ -1,11 +1,21 @@
 import 'server-only'
 
-import { prisma } from '@/prisma/instance'
+import { and, count, eq } from 'drizzle-orm'
+import { db } from '@/db/instance'
+import { friendLinks, siteComments } from '@/db/schema'
 
 export async function getAdminPendingCount() {
   const [siteCommentPendingCount, friendLinkPendingCount] = await Promise.all([
-    prisma.siteComment.count({ where: { state: 'PENDING', targetType: 'BLOG' } }),
-    prisma.friendLink.count({ where: { state: 'PENDING' } }),
+    db
+      .select({ value: count() })
+      .from(siteComments)
+      .where(and(eq(siteComments.state, 'PENDING'), eq(siteComments.targetType, 'BLOG')))
+      .then(([result]) => result.value),
+    db
+      .select({ value: count() })
+      .from(friendLinks)
+      .where(eq(friendLinks.state, 'PENDING'))
+      .then(([result]) => result.value),
   ])
   const commentPendingCount = siteCommentPendingCount
 

@@ -1,28 +1,34 @@
+import { and, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
+import { db } from '@/db/instance'
+import { blogs } from '@/db/schema'
 import { processor } from '@/lib/core/markdown/processor'
-import { prisma } from '@/prisma/instance'
 import ArticleDisplayPage from '@/ui/(main)/blog/article-display-page'
 import DeferredCommentCard from '@/ui/(main)/blog/comment-card/deferred-comment-card'
 import HorizontalDividingLine from '@/ui/components/shared/horizontal-dividing-line'
 import { MainScrollBlur } from '@/ui/components/shared/main-scroll-blur'
 
 export async function BlogDetail({ slug }: { slug: string }) {
-  const blog = await prisma.blog.findUnique({
-    where: {
-      slug,
-      isPublished: true,
-    },
-    include: {
-      tags: true,
+  const record = await db.query.blogs.findFirst({
+    where: and(eq(blogs.slug, slug), eq(blogs.isPublished, true)),
+    with: {
+      tagLinks: {
+        columns: {},
+        with: {
+          tag: true,
+        },
+      },
     },
   })
 
-  if (blog == null || blog.content.length === 0) notFound()
+  if (record == null || record.content.length === 0) notFound()
 
+  const { tagLinks, ...blog } = record
   const sanitizedBlogHtml = await processor.process(blog.content)
   const article = {
     ...blog,
     content: sanitizedBlogHtml.toString(),
+    tags: tagLinks.map(link => link.tag),
   }
 
   const { content, createdAt, tags, id } = article

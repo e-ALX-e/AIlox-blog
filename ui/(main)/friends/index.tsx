@@ -1,17 +1,24 @@
 import type { Friend } from './types'
-import { prisma } from '@/prisma/instance'
+import { eq, sql } from 'drizzle-orm'
+import { db } from '@/db/instance'
+import { friendLinks } from '@/db/schema'
 import { MainEmptyState } from '@/ui/components/shared/main-empty-state'
 import { MainScrollBlur } from '@/ui/components/shared/main-scroll-blur'
 import { FriendApplyButton } from './friend-apply-button'
 import { FriendsList } from './friends-list'
 
 export async function FriendsPage() {
-  const friends = await prisma.$queryRaw<Friend[]>`
-    SELECT "id", "name", "description", "avatarUrl", "siteUrl"
-    FROM "FriendLink"
-    WHERE "state" = 'APPROVED'
-    ORDER BY RANDOM()
-  `
+  const friends: Friend[] = await db
+    .select({
+      id: friendLinks.id,
+      name: friendLinks.name,
+      description: friendLinks.description,
+      avatarUrl: friendLinks.avatarUrl,
+      siteUrl: friendLinks.siteUrl,
+    })
+    .from(friendLinks)
+    .where(eq(friendLinks.state, 'APPROVED'))
+    .orderBy(sql`random()`)
 
   return (
     <>

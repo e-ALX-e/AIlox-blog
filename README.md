@@ -20,7 +20,7 @@
 - Next.js 16 / React 19 / TypeScript 7
 - Tailwind CSS 4 / shadcn/ui / Radix UI / Motion
 - Better Auth / Viem / SIWE
-- Prisma 7 / PostgreSQL / `@prisma/adapter-pg`
+- Drizzle ORM / PostgreSQL / node-postgres
 - TanStack Query / TanStack Table / Zustand
 - UploadThing / Shiki / Unified / Remark / Rehype
 - Biome / Husky / Commitizen
@@ -58,10 +58,10 @@ pnpm install
 
 ### 配置环境变量
 
-复制一份环境变量文件：
+复制一份开发环境变量文件：
 
 ```shell
-cp .env.example .env
+cp .env.example .env.development
 ```
 
 按 `.env.example` 填写下面这些变量：
@@ -103,12 +103,13 @@ openssl rand -base64 32
 
 ### 配置数据库
 
-项目使用 PostgreSQL。创建数据库后，把连接地址填到 `DATABASE_URL`。
+项目使用 PostgreSQL。创建数据库后，把连接地址填到当前环境实际使用的环境变量文件中。
+`drizzle.config.ts` 从 `serverEnv` 获取经过校验的 `DATABASE_URL`。
 
-初始化数据库表：
+首次将现有开发数据库纳入 Drizzle 管理时，生成 schema baseline：
 
 ```shell
-pnpm exec prisma migrate dev --config ./prisma/prisma.config.ts
+pnpm exec drizzle-kit pull --config=drizzle.config.ts --init
 ```
 
 ### 配置 OAuth
@@ -151,7 +152,7 @@ pnpm knip
 
 `knip.json` 补充了静态分析无法自动识别的入口，并保留必要的公共接口：
 
-- `doctor.config.ts`、`next-sitemap.config.js` 和 `prisma/schema.prisma` 是工具配置或 Schema，作为入口保留。
+- `doctor.config.ts`、`next-sitemap.config.js` 和 `drizzle.config.ts` 是工具配置入口。
 - `ui/shadcn/**` 保留基础组件的公共导出和类型，只忽略 `exports`、`types`，仍检查未使用文件和依赖。
 - `server-only` 由当前 Next.js 内置别名解析，忽略其未声明依赖提示，不移除服务端边界标记。
 
@@ -162,7 +163,7 @@ pnpm knip
 推荐部署到 Vercel。部署前确认：
 
 - Vercel 环境变量已按 `.env.example` 配置完整
-- 线上数据库已经执行过 Prisma migration
+- 线上数据库已经执行过对应的 Drizzle migration
 - GitHub / Google OAuth callback URL 已改成线上域名
 - `SITE_URL` 是线上站点地址
 

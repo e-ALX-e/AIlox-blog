@@ -46,7 +46,7 @@ export function FriendLinkEditDialog({
                 <Input
                   id={fieldId}
                   type={field.type}
-                  required
+                  required={field.name !== 'email'}
                   value={editForm[field.name]}
                   onChange={event => {
                     onEditFormValueChange(field.name, event.target.value)

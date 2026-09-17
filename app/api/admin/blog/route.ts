@@ -1,10 +1,13 @@
+import type { SQL } from 'drizzle-orm'
+import { and, count, countDistinct, desc, eq, inArray, like, ne } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
+import { db } from '@/db/instance'
+import { blogs, blogTags, blogToBlogTag, siteComments } from '@/db/schema'
 import { BadRequestError } from '@/lib/common/errors/request'
 import { noPermission } from '@/lib/core/auth/guard'
 import { languages } from '@/lib/i18n/config'
 import { readJsonBody } from '@/lib/infra/http/read-json-body'
 import { withResponse } from '@/lib/infra/http/with-response'
-import { prisma } from '@/prisma/instance'
 import {
   createBlogSchema,
   deleteBlogQuerySchema,
@@ -64,48 +67,62 @@ export const GET = withResponse(async request => {
   }
 
   const { q, tagNames: rawTagNames, take, skip } = queryResult.data
-  const tagNames = parseTagNames(rawTagNames)
+  const tagNames = [...new Set(parseTagNames(rawTagNames))]
+  const conditions: SQL[] = []
 
-  const andWhere = [
-    ...(q != null && q.length > 0
-      ? [
-          {
-            title: {
-              contains: q,
-            },
-          },
-        ]
-      : []),
-    ...tagNames.map(tagName => ({
-      tags: {
-        some: {
-          tagName,
-        },
-      },
-    })),
-  ]
+  if (q != null && q.length > 0) {
+    conditions.push(like(blogs.title, `%${q}%`))
+  }
 
-  const where = andWhere.length > 0 ? { AND: andWhere } : undefined
+  if (tagNames.length > 0) {
+    const matchingBlogIds = db
+      .select({ blogId: blogToBlogTag.blogId })
+      .from(blogToBlogTag)
+      .innerJoin(blogTags, eq(blogTags.id, blogToBlogTag.tagId))
+      .where(inArray(blogTags.tagName, tagNames))
+      .groupBy(blogToBlogTag.blogId)
+      .having(eq(countDistinct(blogTags.tagName), tagNames.length))
+
+    conditions.push(inArray(blogs.id, matchingBlogIds))
+  }
+
+  const where = and(...conditions)
 
   const [list, total] = await Promise.all([
-    prisma.blog.findMany({
-      where,
-      select: {
-        id: true,
-        slug: true,
-        title: true,
-        isPublished: true,
-        createdAt: true,
-        updatedAt: true,
-        tags: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take,
-      skip,
-    }),
-    prisma.blog.count({ where }),
+    db.query.blogs
+      .findMany({
+        where,
+        columns: {
+          id: true,
+          slug: true,
+          title: true,
+          isPublished: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        with: {
+          tagLinks: {
+            columns: {},
+            with: {
+              tag: true,
+            },
+          },
+        },
+        orderBy: desc(blogs.createdAt),
+        limit: take,
+        offset: skip,
+      })
+      .then(records =>
+        records.map(({ tagLinks, ...blog }) => ({
+          ...blog,
+          tags: tagLinks.map(link => link.tag),
+        })),
+      ),
+    db
+      .select({ value: count() })
+      .from(blogs)
+      .where(where)
+      .then(([result]) => result.value),
   ])
 
   return {
@@ -129,23 +146,21 @@ export const POST = withResponse(async request => {
   }
 
   const payload = parseResult.data
-
-  const existingBlog = await prisma.blog.findUnique({
-    where: { slug: payload.slug },
+  const existingBlog = await db.query.blogs.findFirst({
+    where: eq(blogs.slug, payload.slug),
   })
 
   if (existingBlog != null) {
     throw new BadRequestError('该 slug 已存在', { data: { slug: payload.slug } })
   }
 
-  const relatedTags = await prisma.blogTag.findMany({
-    where: {
-      tagName: {
-        in: payload.relatedTagNames,
-      },
-    },
-    select: { id: true },
-  })
+  const relatedTags =
+    payload.relatedTagNames.length === 0
+      ? []
+      : await db
+          .select({ id: blogTags.id, tagName: blogTags.tagName })
+          .from(blogTags)
+          .where(inArray(blogTags.tagName, payload.relatedTagNames))
 
   if (relatedTags.length > 3) {
     throw new BadRequestError('标签数量超过 3 个限制', {
@@ -153,19 +168,31 @@ export const POST = withResponse(async request => {
     })
   }
 
-  const created = await prisma.blog.create({
-    data: {
-      title: payload.title,
-      slug: payload.slug,
-      isPublished: payload.isPublished,
-      content: payload.content,
-      tags: {
-        connect: relatedTags.map(tag => ({ id: tag.id })),
-      },
-    },
-    include: {
-      tags: true,
-    },
+  const created = await db.transaction(async transaction => {
+    const [createdBlog] = await transaction
+      .insert(blogs)
+      .values({
+        title: payload.title,
+        slug: payload.slug,
+        isPublished: payload.isPublished,
+        content: payload.content,
+        updatedAt: new Date(),
+      })
+      .returning()
+
+    if (relatedTags.length > 0) {
+      await transaction.insert(blogToBlogTag).values(
+        relatedTags.map(tag => ({
+          blogId: createdBlog.id,
+          tagId: tag.id,
+        })),
+      )
+    }
+
+    return {
+      ...createdBlog,
+      tags: relatedTags,
+    }
   })
 
   revalidateBlogPaths(created.slug)
@@ -189,9 +216,8 @@ export const PATCH = withResponse(async request => {
   }
 
   const { id, title, slug, isPublished, relatedTagNames, content } = parseResult.data
-
-  const existingBlog = await prisma.blog.findUnique({
-    where: { id },
+  const existingBlog = await db.query.blogs.findFirst({
+    where: eq(blogs.id, id),
   })
 
   if (existingBlog == null) {
@@ -199,13 +225,8 @@ export const PATCH = withResponse(async request => {
   }
 
   if (slug != null) {
-    const duplicatedSlugBlog = await prisma.blog.findFirst({
-      where: {
-        slug,
-        NOT: {
-          id,
-        },
-      },
+    const duplicatedSlugBlog = await db.query.blogs.findFirst({
+      where: and(eq(blogs.slug, slug), ne(blogs.id, id)),
     })
 
     if (duplicatedSlugBlog != null) {
@@ -213,49 +234,62 @@ export const PATCH = withResponse(async request => {
     }
   }
 
-  let blogTagsUpdate:
-    | {
-        set: { id: number }[]
-      }
-    | undefined
+  let relatedTags: Array<{ id: number; tagName: string }> | undefined
 
   if (relatedTagNames != null) {
-    const relatedTags = await prisma.blogTag.findMany({
-      where: {
-        tagName: {
-          in: relatedTagNames,
-        },
-      },
-      select: { id: true },
-    })
+    relatedTags =
+      relatedTagNames.length === 0
+        ? []
+        : await db
+            .select({ id: blogTags.id, tagName: blogTags.tagName })
+            .from(blogTags)
+            .where(inArray(blogTags.tagName, relatedTagNames))
 
     if (relatedTags.length > 3) {
       throw new BadRequestError('标签数量超过 3 个限制', { data: { relatedTagNames } })
     }
-
-    blogTagsUpdate = {
-      set: relatedTags.map(tag => ({
-        id: tag.id,
-      })),
-    }
   }
 
-  const updated = await prisma.blog.update({
-    where: { id },
-    data: {
-      ...(title != null ? { title } : {}),
-      ...(slug != null ? { slug } : {}),
-      ...(isPublished != null ? { isPublished } : {}),
-      ...(content != null ? { content } : {}),
-      ...(blogTagsUpdate != null
-        ? {
-            tags: blogTagsUpdate,
-          }
-        : {}),
-    },
-    include: {
-      tags: true,
-    },
+  const updated = await db.transaction(async transaction => {
+    const [updatedBlog] = await transaction
+      .update(blogs)
+      .set({
+        ...(title != null ? { title } : {}),
+        ...(slug != null ? { slug } : {}),
+        ...(isPublished != null ? { isPublished } : {}),
+        ...(content != null ? { content } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(blogs.id, id))
+      .returning()
+
+    let updatedTags: Array<{ id: number; tagName: string }>
+
+    if (relatedTags == null) {
+      updatedTags = await transaction
+        .select({ id: blogTags.id, tagName: blogTags.tagName })
+        .from(blogToBlogTag)
+        .innerJoin(blogTags, eq(blogTags.id, blogToBlogTag.tagId))
+        .where(eq(blogToBlogTag.blogId, id))
+    } else {
+      await transaction.delete(blogToBlogTag).where(eq(blogToBlogTag.blogId, id))
+
+      if (relatedTags.length > 0) {
+        await transaction.insert(blogToBlogTag).values(
+          relatedTags.map(tag => ({
+            blogId: id,
+            tagId: tag.id,
+          })),
+        )
+      }
+
+      updatedTags = relatedTags
+    }
+
+    return {
+      ...updatedBlog,
+      tags: updatedTags,
+    }
   })
 
   revalidateBlogPaths(existingBlog.slug, updated.slug)
@@ -280,29 +314,20 @@ export const DELETE = withResponse(async request => {
   }
 
   const { id } = queryResult.data
-  const existingBlog = await prisma.blog.findUnique({
-    where: {
-      id,
-    },
+  const existingBlog = await db.query.blogs.findFirst({
+    where: eq(blogs.id, id),
   })
 
   if (existingBlog == null) {
     throw new BadRequestError('Blog 不存在', { data: { id } })
   }
 
-  await prisma.$transaction([
-    prisma.siteComment.deleteMany({
-      where: {
-        targetType: 'BLOG',
-        targetId: id,
-      },
-    }),
-    prisma.blog.delete({
-      where: {
-        id,
-      },
-    }),
-  ])
+  await db.transaction(async transaction => {
+    await transaction
+      .delete(siteComments)
+      .where(and(eq(siteComments.targetType, 'BLOG'), eq(siteComments.targetId, id)))
+    await transaction.delete(blogs).where(eq(blogs.id, id))
+  })
 
   revalidateBlogPaths(existingBlog.slug)
 

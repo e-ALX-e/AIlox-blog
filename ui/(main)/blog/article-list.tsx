@@ -1,32 +1,9 @@
-import type { Variants } from 'motion/react'
 import type { BlogListItem } from '@/lib/api/blog/type'
 import * as motion from 'motion/react-client'
 import { MainEmptyState } from '@/ui/components/shared/main-empty-state'
 import { MainScrollBlur } from '@/ui/components/shared/main-scroll-blur'
+import { ViewportRevealItem, ViewportRevealList } from '@/ui/components/shared/viewport-reveal-list'
 import { ArticleLink } from './article-link'
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 40 },
-  visible: {
-    opacity: 1,
-    y: [30, -8, 0] as number[],
-    transition: {
-      type: 'tween' as const,
-      ease: 'easeInOut',
-      duration: 0.8,
-    },
-  },
-}
-
-const listVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-    },
-  },
-}
 
 // TODO: 大括号样式
 export const ArticleList = ({ items }: { items: BlogListItem[] }) => {
@@ -58,33 +35,36 @@ export const ArticleList = ({ items }: { items: BlogListItem[] }) => {
 
   return (
     <>
-      <motion.div className="group/list flex flex-col gap-10" variants={listVariants}>
-        {sortedYears.map(year => (
-          <motion.div key={year} className="flex flex-col gap-1" variants={listVariants}>
-            <motion.h3
-              variants={itemVariants}
-              className="ml-2 select-none font-semibold text-2xl text-muted-foreground/30"
-            >
-              # {year}
-            </motion.h3>
-            <div className="flex flex-col">
-              {groupedItems[year].map(v => (
-                <motion.div
-                  variants={itemVariants}
-                  key={v.id}
-                  className="transition-opacity hover:opacity-100! group-hover/list:opacity-50!"
-                  whileHover={{
-                    scale: 1.01,
-                    transition: { type: 'spring', stiffness: 200, damping: 25 },
-                  }}
-                >
-                  <ArticleLink slug={v.slug} title={v.title} createdAt={v.createdAt} />
-                </motion.div>
-              ))}
+      <ViewportRevealList>
+        <div className="group/list flex flex-col gap-10">
+          {sortedYears.map(year => (
+            <div key={year} className="flex flex-col gap-1">
+              <ViewportRevealItem
+                as="h3"
+                className="ml-2 select-none font-semibold text-2xl text-muted-foreground/30"
+              >
+                # {year}
+              </ViewportRevealItem>
+              <div className="flex flex-col">
+                {groupedItems[year].map(v => (
+                  <ViewportRevealItem as="div" key={v.id}>
+                    <motion.div
+                      inherit={false}
+                      className="transition-opacity hover:opacity-100! group-hover/list:opacity-50!"
+                      whileHover={{
+                        scale: 1.01,
+                        transition: { type: 'spring', stiffness: 200, damping: 25 },
+                      }}
+                    >
+                      <ArticleLink slug={v.slug} title={v.title} createdAt={v.createdAt} />
+                    </motion.div>
+                  </ViewportRevealItem>
+                ))}
+              </div>
             </div>
-          </motion.div>
-        ))}
-      </motion.div>
+          ))}
+        </div>
+      </ViewportRevealList>
       <MainScrollBlur />
     </>
   )

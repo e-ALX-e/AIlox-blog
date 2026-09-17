@@ -1,47 +1,17 @@
-import type { Variants } from 'motion/react'
 import type { Friend } from './types'
-import * as motion from 'motion/react-client'
 import Link from 'next/link'
 import { cn } from '@/lib/utils/common/shadcn'
 import { useTranslations } from '@/ui/components/provider/main/language-provider'
+import { ViewportRevealItem } from '@/ui/components/shared/viewport-reveal-list'
 import { FriendAvatarImage } from './friend-avatar-image'
 
-const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 40 },
-  visible: {
-    opacity: 1,
-    y: [30, -8, 0] as number[],
-    transition: {
-      type: 'tween' as const,
-      ease: 'easeInOut',
-      duration: 0.8,
-    },
-  },
-}
-
-export function FriendCard({
-  friend,
-  index,
-  isVisible,
-  shouldAnimate,
-  onViewportEnter,
-}: {
-  friend: Friend
-  index: number
-  isVisible: boolean
-  shouldAnimate: boolean
-  onViewportEnter: () => void
-}) {
+export function FriendCard({ friend, index }: { friend: Friend; index: number }) {
   const isRightAligned = index % 2 === 1
   const translations = useTranslations()
 
   return (
-    <motion.li
-      initial={shouldAnimate ? 'hidden' : false}
-      animate={isVisible ? 'visible' : 'hidden'}
-      onViewportEnter={onViewportEnter}
-      viewport={{ amount: 0.4, once: true }}
-      variants={cardVariants}
+    <ViewportRevealItem
+      as="li"
       className={cn('flex w-[80%] md:w-[60%]', isRightAligned && 'self-end')}
     >
       <Link
@@ -65,6 +35,6 @@ export function FriendCard({
           </span>
         </span>
       </Link>
-    </motion.li>
+    </ViewportRevealItem>
   )
 }

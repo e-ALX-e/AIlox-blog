@@ -5,11 +5,15 @@ import { useEffect, useState } from 'react'
 import { sileo } from 'sileo'
 import {
   getTranslationAdminState,
-  syncAllTranslations,
+  syncTranslation,
   type TranslationAdminState,
   updateTranslationConfig,
 } from '@/lib/api/translation/admin'
-import { languageDisplayName } from '@/lib/i18n/config'
+import {
+  languageDisplayName,
+  translationLanguages,
+  type TranslationLanguage,
+} from '@/lib/i18n/config'
 import { Button } from '@/ui/shadcn/button'
 import { Input } from '@/ui/shadcn/input'
 import { Label } from '@/ui/shadcn/label'
@@ -23,6 +27,12 @@ const emptyUsage: TranslationAdminState['usage'] = {
   byLanguage: [],
 }
 
+type SyncFailure = {
+  blogId: number
+  language: TranslationLanguage
+  error: string
+}
+
 export function AdminTranslationPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -33,6 +43,20 @@ export function AdminTranslationPage() {
   const [apiKey, setApiKey] = useState('')
   const [hasApiKey, setHasApiKey] = useState(false)
   const [usage, setUsage] = useState(emptyUsage)
+  const [publishedBlogIds, setPublishedBlogIds] = useState<number[]>([])
+  const [syncDone, setSyncDone] = useState(0)
+  const [syncTotal, setSyncTotal] = useState(0)
+
+  const loadState = async () => {
+    const data = await getTranslationAdminState()
+    setEnabled(data.config.enabled)
+    setBaseUrl(data.config.baseUrl)
+    setModel(data.config.model)
+    setHasApiKey(data.config.hasApiKey)
+    setUsage(data.usage)
+    setPublishedBlogIds(data.publishedBlogIds)
+    return data
+  }
 
   useEffect(() => {
     let active = true
@@ -45,6 +69,7 @@ export function AdminTranslationPage() {
         setModel(data.config.model)
         setHasApiKey(data.config.hasApiKey)
         setUsage(data.usage)
+        setPublishedBlogIds(data.publishedBlogIds)
       })
       .catch(error => {
         sileo.error({ title: error instanceof Error ? error.message : '加载模型配置失败' })
@@ -80,30 +105,65 @@ export function AdminTranslationPage() {
   }
 
   const syncAll = async () => {
+    const jobs = publishedBlogIds.flatMap(blogId =>
+      translationLanguages.map(language => ({ blogId, language })),
+    )
+
+    if (jobs.length === 0) {
+      sileo.info({ title: '没有已发布文章需要翻译' })
+      return
+    }
+
     setIsSyncing(true)
+    setSyncDone(0)
+    setSyncTotal(jobs.length)
+
+    const failures: SyncFailure[] = []
+    let nextIndex = 0
+
+    const worker = async () => {
+      while (nextIndex < jobs.length) {
+        const job = jobs[nextIndex]
+        nextIndex += 1
+
+        try {
+          await syncTranslation(job)
+        } catch (error) {
+          failures.push({
+            ...job,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        } finally {
+          setSyncDone(value => value + 1)
+        }
+      }
+    }
 
     try {
-      const response = await syncAllTranslations()
-      setUsage(response.usage)
+      // Keep each HTTP request short and use only two concurrent model calls.
+      // This avoids a single Cloudflare request waiting for every article/language.
+      await Promise.all([worker(), worker()])
+      const freshState = await loadState()
 
-      if (response.failures.length > 0) {
-        const preview = response.failures
+      if (failures.length > 0) {
+        const preview = failures
           .slice(0, 3)
-          .map(item => `#${item.blogId} ${item.language}: ${item.error}`)
+          .map(
+            item =>
+              `#${item.blogId} ${languageDisplayName[item.language]}: ${item.error}`,
+          )
           .join('；')
 
         sileo.error({
-          title: `翻译完成，但有 ${response.failures.length} 个失败`,
+          title: `翻译完成，但有 ${failures.length} 个任务失败`,
           description: preview,
         })
       } else {
         sileo.success({
           title: '已重新翻译全部已发布文章',
-          description: `成功生成 ${response.translatedCount} 个语言版本`,
+          description: `完成 ${jobs.length} 个翻译任务，总 Token ${freshState.usage.totalTokens.toLocaleString()}`,
         })
       }
-    } catch (error) {
-      sileo.error({ title: error instanceof Error ? error.message : '翻译同步失败' })
     } finally {
       setIsSyncing(false)
     }
@@ -116,6 +176,9 @@ export function AdminTranslationPage() {
       </div>
     )
   }
+
+  const progressPercent =
+    syncTotal > 0 ? Math.min(100, Math.round((syncDone / syncTotal) * 100)) : 0
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 py-4 pb-12">
@@ -192,9 +255,24 @@ export function AdminTranslationPage() {
             ) : (
               <RefreshCcw className="size-4" />
             )}
-            重新翻译全部已发布文章
+            {isSyncing ? `翻译中 ${syncDone}/${syncTotal}` : '重新翻译全部已发布文章'}
           </Button>
         </div>
+
+        {isSyncing ? (
+          <div className="mt-4">
+            <div className="mb-1 flex justify-between text-muted-foreground text-xs">
+              <span>分批翻译中，每个请求只处理一篇文章的一种语言</span>
+              <span>{progressPercent}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full bg-primary transition-[width] duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-xl border bg-card p-5 shadow-xs">

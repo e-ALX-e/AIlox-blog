@@ -1,191 +1,294 @@
-# yeyu-blog
+# AIlox Blog
 
-个人开发的全栈博客项目，部署在 Vercel。
+Ailoxi（黯留星）的个人全栈技术博客。
 
-博客地址：[叶鱼 | 业余](https://www.useyeyu.cc)
+当前站点：<https://www.mikuflare.com>
 
-> 国内访问速度不确定，可能需要网络环境支持。
+本仓库基于 [yeyu-blog](https://github.com/yeyuqwer/yeyu-blog) 进行二次开发，在保留原项目核心架构的基础上，加入了自托管部署、MinIO / S3 图片存储、个人品牌与界面定制等改动。
 
 ## 功能
 
-- 前台：中英文主页、博客、友链
-- 内容：Markdown 渲染、代码高亮、标签分类、博客评论与回复
-- 后台：博客、标签、友链、评论管理
-- 登录：Better Auth、GitHub OAuth、Google OAuth、SIWE 钱包登录
-- 上传：UploadThing 图片上传
-- 个性化：主题切换、天空背景控制、背景音乐
+- 中英文首页、日志与友链页面
+- Markdown / GFM 渲染、代码高亮、表格、任务列表等
+- 博客图片上传与文章内图片展示
+- 自定义 Markdown 图片尺寸语法
+- 评论、回复、删除与管理员标识
+- GitHub OAuth / Google OAuth / Web3 钱包登录
+- 博客、标签、友链、评论后台管理
+- 主题切换、天空背景与背景音乐
+- Ailoxi 自定义头像、Logo、技术栈与 SEO 信息
+- Docker Compose 自托管部署
+- PostgreSQL + Drizzle ORM
+- MinIO / S3 兼容对象存储
+- 可配合 Cloudflare Tunnel 对外提供 HTTPS 访问
 
 ## 技术栈
 
-- Next.js 16 / React 19 / TypeScript 7
-- Tailwind CSS 4 / shadcn/ui / Radix UI / Motion
-- Better Auth / Viem / SIWE
-- Drizzle ORM / PostgreSQL / node-postgres
-- TanStack Query / TanStack Table / Zustand
-- UploadThing / Shiki / Unified / Remark / Rehype
-- Biome / Husky / Commitizen
+- Next.js 16
+- React 19
+- TypeScript 7
+- Tailwind CSS 4
+- Radix UI / Base UI
+- Motion
+- Better Auth
+- Drizzle ORM
+- PostgreSQL
+- TanStack Query / TanStack Table
+- Zustand
+- Unified / Remark / Rehype
+- AWS SDK S3 Client
+- MinIO
+- Docker / Docker Compose
 
-## 截图展示
+## 相比上游的主要改动
 
-![首页深色主题](.github/assets/home-dark.png)
+本仓库针对个人使用与自托管场景进行了较多调整，包括：
 
-![首页浅色主题](.github/assets/home-light.png)
+- 将站点品牌修改为 **Ailoxi / 黯留星**
+- 将站点域名和 SEO 信息修改为 `www.mikuflare.com`
+- 使用自定义 Ailoxi 手写 Logo 动画
+- 替换首页头像、技术栈图标与个人介绍
+- 图片存储从 UploadThing 调整为 **MinIO / S3 兼容存储**
+- 新增 `/api/media/upload` 图片上传接口
+- 新增 `/media/[...key]` 图片读取路由
+- 后台 Markdown 编辑器支持粘贴 / 拖拽上传图片
+- Markdown 图片支持自定义显示宽度
+- 新增 Dockerfile、Docker Compose 与 PostgreSQL / MinIO 部署配置
+- 调整评论头像、登录用户头像、友链头像等显示逻辑
 
-![后台首页](.github/assets/admin-dashboard.png)
+## Markdown 图片尺寸
 
-## 本地运行
+普通 Markdown 图片默认使用文章可用宽度：
 
-确保你已安装：
-
-- Git
-- pnpm
-- Node.js >= 20
-- PostgreSQL 数据库，使用本地数据库、Neon 或 Vercel Storage 都可以
-
-### 获取项目代码
-
-先 fork 仓库到你自己的账号，再 clone 你 fork 后的仓库：
-
-```shell
-git clone {REPO}
+```md
+![图片说明](/media/blog/example.webp)
 ```
 
-### 安装依赖
+也可以在图片说明后添加尺寸：
 
-```shell
+```md
+![图片说明|80%](/media/blog/example.webp)
+![图片说明|50%](/media/blog/example.webp)
+![图片说明|600px](/media/blog/example.webp)
+```
+
+未指定尺寸时保持默认最大宽度。
+
+## 本地开发
+
+需要准备：
+
+- Git
+- Node.js 20+
+- pnpm
+- PostgreSQL
+- S3 兼容对象存储，例如 MinIO
+- GitHub OAuth App
+- Google OAuth Client
+
+安装依赖：
+
+```bash
+git clone https://github.com/e-ALX-e/AIlox-blog.git
+cd AIlox-blog
+
 pnpm install
 ```
 
-### 配置环境变量
-
-复制一份开发环境变量文件：
-
-```shell
-cp .env.example .env.development
-```
-
-按 `.env.example` 填写下面这些变量：
+创建本地环境变量文件，并至少配置：
 
 ```env
 SITE_URL=http://localhost:3000
 
-BETTER_AUTH_SECRET=
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
 
-ADMIN_EMAILS="admin@example.com editor@example.com"
-ADMIN_WALLET_ADDRESS=""
+BETTER_AUTH_SECRET=
+ADMIN_EMAILS=admin@example.com
+ADMIN_WALLET_ADDRESS=
 
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
+
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 
-UPLOADTHING_TOKEN=
-DATABASE_URL=
+S3_ENDPOINT=http://127.0.0.1:9000
+S3_ACCESS_KEY=
+S3_SECRET_KEY=
+S3_BUCKET=ailox-blog
+S3_REGION=us-east-1
 
 SMTP_HOST=
 SMTP_PORT=465
 SMTP_SECURE=true
 SMTP_USER=
 SMTP_PASS=
-MAIL_FROM="叶鱼博客 <notice@example.com>"
+MAIL_FROM=
 MAIL_TO=
 ```
 
-Gmail 应用专用密码可以不写空格，代码发送前也会自动移除空白。
+其中 SMTP 整组配置为可选；不使用邮件通知时应全部留空。
 
-`BETTER_AUTH_SECRET` 可以用下面的命令生成：
+生成 Better Auth 密钥：
 
-```shell
+```bash
 openssl rand -base64 32
 ```
 
-当前服务端环境变量校验要求 GitHub 和 Google 两组 OAuth 都填写。`ADMIN_EMAILS` 支持使用空格或英文逗号分隔多个邮箱；`ADMIN_WALLET_ADDRESS` 是可选项，不需要钱包登录后台时可以留空。SMTP 配置需要整组填写或全部留空；`MAIL_TO` 是站长通知收件人，多个邮箱用英文逗号分隔。
+启动开发环境：
 
-### 配置数据库
-
-项目使用 PostgreSQL。创建数据库后，把连接地址填到当前环境实际使用的环境变量文件中。
-`drizzle.config.ts` 从 `serverEnv` 获取经过校验的 `DATABASE_URL`。
-
-首次将现有开发数据库纳入 Drizzle 管理时，生成 schema baseline：
-
-```shell
-pnpm exec drizzle-kit pull --config=drizzle.config.ts --init
-```
-
-### 配置 OAuth
-
-GitHub OAuth App：
-
-- Homepage URL：`http://localhost:3000`
-- Authorization callback URL：`http://localhost:3000/api/auth/callback/github`
-
-Google OAuth Client：
-
-- Authorized JavaScript origins：`http://localhost:3000`
-- Authorized redirect URI：`http://localhost:3000/api/auth/callback/google`
-
-部署到线上时，把上面的 `localhost` 替换成你的线上域名。
-
-### 配置图片上传
-
-前往 [UploadThing](https://uploadthing.com/) 创建 app，把 API Token 填到：
-
-```env
-UPLOADTHING_TOKEN=
-```
-
-### 启动开发服务
-
-```shell
+```bash
 pnpm dev
 ```
 
-前台地址：`http://localhost:3000`
+默认地址：
 
-后台地址：`http://localhost:3000/admin`
+```text
+http://localhost:3000
+```
 
-## 未使用代码检查
+后台：
 
-```shell
+```text
+http://localhost:3000/admin
+```
+
+## OAuth 回调地址
+
+本地开发：
+
+```text
+GitHub:
+http://localhost:3000/api/auth/callback/github
+
+Google:
+http://localhost:3000/api/auth/callback/google
+```
+
+生产环境：
+
+```text
+GitHub:
+https://www.mikuflare.com/api/auth/callback/github
+
+Google:
+https://www.mikuflare.com/api/auth/callback/google
+```
+
+## Docker 部署
+
+仓库已包含：
+
+```text
+Dockerfile
+compose.yaml
+README-DOCKER.md
+```
+
+构建并启动应用：
+
+```bash
+docker compose build app && \
+docker compose up -d --force-recreate app
+```
+
+完整的数据库初始化、备份、恢复和 Docker 部署说明见：
+
+[README-DOCKER.md](./README-DOCKER.md)
+
+当前 Compose 架构主要包含：
+
+```text
+Browser
+   ↓
+Cloudflare / Tunnel
+   ↓
+Next.js App
+   ├── PostgreSQL
+   └── MinIO
+```
+
+生产环境建议只将应用监听在本机地址，再通过反向代理或 Cloudflare Tunnel 暴露公网 HTTPS。
+
+## 图片存储
+
+博客图片使用 S3 API 存储，目前主要面向 MinIO。
+
+上传接口：
+
+```text
+POST /api/media/upload
+```
+
+读取路径：
+
+```text
+/media/<object-key>
+```
+
+当前上传接口支持：
+
+- JPEG
+- PNG
+- WebP
+- GIF
+- AVIF
+
+单张图片最大为 4 MB。
+
+## 常用命令
+
+```bash
+# 开发
+pnpm dev
+
+# 构建
+pnpm build
+
+# TypeScript 检查
+pnpm ts:check
+
+# 代码检查
+pnpm lint
+
+# 自动修复
+pnpm lint:fix
+
+# 未使用代码 / 依赖检查
 pnpm knip
 ```
 
-`knip.json` 补充了静态分析无法自动识别的入口，并保留必要的公共接口：
+## 主要配置位置
 
-- `doctor.config.ts`、`next-sitemap.config.js` 和 `drizzle.config.ts` 是工具配置入口。
-- `ui/shadcn/**` 保留基础组件的公共导出和类型，只忽略 `exports`、`types`，仍检查未使用文件和依赖。
-- `server-only` 由当前 Next.js 内置别名解析，忽略其未声明依赖提示，不移除服务端边界标记。
+- `config/seo/index.ts`：SEO、站点名称和域名
+- `lib/i18n/messages.ts`：中英文文案
+- `config/img/Ailoxi.png`：站点头像
+- `ui/(main)/(home)/profile-section.tsx`：首页资料
+- `ui/(main)/(home)/tech-stack.tsx`：首页技术栈
+- `ui/(main)/layout/header/`：顶部导航与 Ailoxi Logo
+- `ui/admin/`：后台管理界面
+- `lib/core/markdown/`：Markdown 处理与扩展
+- `lib/infra/storage/s3.ts`：S3 / MinIO 客户端
+- `compose.yaml`：Docker Compose 服务配置
 
-业务代码不在忽略范围内；没有引用的文件和导出仍需清理。
+## License & Attribution
 
-## 部署
+本项目遵循 **MIT License**。
 
-推荐部署到 Vercel。部署前确认：
+本仓库是 [yeyu-blog](https://github.com/yeyuqwer/yeyu-blog) 的二次开发版本。
 
-- Vercel 环境变量已按 `.env.example` 配置完整
-- 线上数据库已经执行过对应的 Drizzle migration
-- GitHub / Google OAuth callback URL 已改成线上域名
-- `SITE_URL` 是线上站点地址
+原项目版权声明：
 
-## 修改网站信息
+```text
+Copyright (c) 2025 Ye Yu
+```
 
-- `config/seo/index.ts`：站点 metadata 和 SEO 信息
-- `config/env/parse-server-env.ts`、`config/env/server-env.ts`：服务端环境变量校验与读取
-- `config/img/avatar.webp`：首页头像图片
-- `ui/(main)/(home)/profile-section.tsx`：首页个人简介
-- `ui/(main)/layout/contact-me/index.tsx`：底部联系方式
-- `ui/(main)/(home)/tech-stack.tsx`：首页技术栈展示
-- `lib/core/auth/guard.ts`、`lib/core/auth/utils.ts`：后台管理员权限判断
-- `ui/components/modal/main/login-modal/index.tsx`：登录弹窗
+根据 MIT License 的要求，本仓库保留原项目的版权声明和许可证文本。完整许可证请查看 [LICENSE](./LICENSE)。
 
-## 设计参考
+本仓库中的二次开发、个人化配置与新增功能由 **Ailoxi（黯留星）** 维护。
 
-- [fuxiaochen](https://github.com/aifuxi/fuxiaochen)
-- [Shiro](https://github.com/Innei/Shiro)
-- [Arthals' Ink](https://arthals.ink/)
-- [grtblog](https://github.com/grtsinry43/grtblog)
-- [Arthals-Ink](https://github.com/zhuozhiyongde/Arthals-Ink)
-- [Anthony Fu](https://github.com/antfu/antfu.me)
-- [Victor Williams](https://www.victorwilliams.me/)
-- [Vercel Fonts](https://vercel.com/font)
-- [WendRevival](https://x.com/WendRevival/status/2021680550226829780)
+MIT License 允许在遵守许可证条件的前提下使用、复制、修改、合并、发布、分发、再许可及销售软件副本。
+
+---
+
+Maintained by **Ailoxi / 黯留星**

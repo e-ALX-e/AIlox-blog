@@ -9,7 +9,7 @@ const sharedMetadata = {
   },
 } satisfies Metadata
 
-export const seoMetadata = {
+const baseSeoMetadata = {
   zh: {
     root: {
       ...sharedMetadata,
@@ -196,6 +196,15 @@ export const seoMetadata = {
     articleDescription: (title: string) =>
       `Read "${title}" on Ailoxi's blog.`,
   },
+} as const
+
+export const seoMetadata = {
+  zh: baseSeoMetadata.zh,
+  en: baseSeoMetadata.en,
+  'zh-tw': baseSeoMetadata.en,
+  ja: baseSeoMetadata.en,
+  ru: baseSeoMetadata.en,
+  de: baseSeoMetadata.en,
 } satisfies Record<
   Language,
   {

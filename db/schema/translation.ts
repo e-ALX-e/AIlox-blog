@@ -73,3 +73,23 @@ export const translationTasks = pgTable(
     ),
   ],
 )
+
+
+export const translationRatings = pgTable(
+  'TranslationRating',
+  {
+    blogId: integer('blogId')
+      .notNull()
+      .references(() => blogs.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+    language: varchar('language', { length: 16 }).notNull(),
+    score: integer('score').notNull(),
+    createdAt: dateTime('createdAt').defaultNow().notNull(),
+    updatedAt: dateTime('updatedAt').defaultNow().notNull(),
+  },
+  table => [
+    primaryKey({
+      columns: [table.blogId, table.language],
+      name: 'TranslationRating_blogId_language_pkey',
+    }),
+  ],
+)

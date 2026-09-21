@@ -9,7 +9,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-ye-font">
         <Script id="sync-document-language" strategy="beforeInteractive">
           {`const language = window.location.pathname.split('/')[1]
-const htmlLanguage = { zh: 'zh-CN', en: 'en' }[language]
+const htmlLanguage = {
+  zh: 'zh-CN',
+  en: 'en',
+  'zh-tw': 'zh-TW',
+  ja: 'ja',
+  ru: 'ru',
+  de: 'de',
+}[language]
 if (htmlLanguage !== undefined) document.documentElement.lang = htmlLanguage`}
         </Script>
         <GlobalProvider>{children}</GlobalProvider>

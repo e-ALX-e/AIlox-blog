@@ -6,6 +6,7 @@ import { db } from '@/db/instance'
 import {
   blogs,
   blogTranslations,
+  translationRatings,
   translationTasks,
   translationUsage,
 } from '@/db/schema'
@@ -297,6 +298,17 @@ export async function syncBlogTranslation(
         completionTokens: translated.usage.completionTokens,
         totalTokens: translated.usage.totalTokens,
       })
+
+      // A new translation version must be rated again. Keep the satisfaction
+      // matrix empty for this blog/language until an administrator reviews it.
+      await transaction
+        .delete(translationRatings)
+        .where(
+          and(
+            eq(translationRatings.blogId, blog.id),
+            eq(translationRatings.language, language),
+          ),
+        )
 
       return true
     })

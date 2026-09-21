@@ -1,6 +1,6 @@
 import type { Language } from './config'
 
-export const messages = {
+const baseMessages = {
   zh: {
     common: {
       empty: '虚无。',
@@ -45,7 +45,7 @@ export const messages = {
     header: {
       homeLabel: '返回首页',
       navigationLabel: '主导航',
-      switchLanguageLabel: '切换到英文',
+      switchLanguageLabel: '切换语言',
       routes: {
         blog: '日志',
         friends: '友链',
@@ -255,7 +255,7 @@ export const messages = {
     header: {
       homeLabel: 'Back to home',
       navigationLabel: 'Main navigation',
-      switchLanguageLabel: 'Switch to Chinese',
+      switchLanguageLabel: 'Switch language',
 
       routes: {
         blog: 'Blog',
@@ -490,4 +490,13 @@ export const messages = {
         'Sign in to www.mikuflare.com with Ethereum',
     },
   },
+} as const
+
+export const messages = {
+  zh: baseMessages.zh,
+  en: baseMessages.en,
+  'zh-tw': baseMessages.zh,
+  ja: baseMessages.en,
+  ru: baseMessages.en,
+  de: baseMessages.en,
 } as const satisfies Record<Language, object>

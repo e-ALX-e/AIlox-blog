@@ -104,7 +104,7 @@ translated complete Markdown body`,
         },
       ],
     }),
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(100_000),
   })
 
   const json = (await response.json().catch(() => null)) as

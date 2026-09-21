@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import type { CommentAuthorLike } from './type'
 import Image from 'next/image'
-import avatar from '@/config/img/Ailoxi.png'
 import { GitHubIcon } from '@/ui/components/modal/main/login-modal/assets/github-icon'
 import { GoogleIcon } from '@/ui/components/modal/main/login-modal/assets/google-icon'
 import { useTranslations } from '@/ui/components/provider/main/language-provider'
@@ -70,28 +69,23 @@ export function CommentAuthorAvatar({ comment }: { comment: CommentAuthorLike })
     provider,
     githubAccountId,
   } = getCommentAuthor(comment)
-  const avatarContent = comment.isAdmin ? (
-    <Image
-      src={avatar}
-      alt={displayName}
-      width={40}
-      height={40}
-      className="size-10 rounded-full border border-black/15 bg-theme-surface object-cover dark:border-white/15"
-    />
-  ) : commentAvatar != null ? (
-    <Image
-      src={commentAvatar}
-      alt={displayName}
-      width={40}
-      height={40}
-      className="size-10 rounded-full border border-black/15 bg-theme-surface object-cover dark:border-white/15"
-    />
-  ) : (
-    <AccountIcon
-      account={address}
-      className="size-10 rounded-full border border-black/15 bg-theme-surface dark:border-white/15"
-    />
-  )
+
+  const avatarContent =
+    commentAvatar != null ? (
+      <Image
+        src={commentAvatar}
+        alt={displayName}
+        width={40}
+        height={40}
+        className="size-10 rounded-full border border-black/15 bg-theme-surface object-cover dark:border-white/15"
+        unoptimized
+      />
+    ) : (
+      <AccountIcon
+        account={address}
+        className="size-10 rounded-full border border-black/15 bg-theme-surface dark:border-white/15"
+      />
+    )
 
   return (
     <CommentAvatarFrame

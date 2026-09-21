@@ -17,10 +17,41 @@ export type TranslationResult = {
   usage: Usage
 }
 
+type MarkdownSegment =
+  | { kind: 'translate'; text: string }
+  | { kind: 'verbatim'; text: string }
+
+type TranslationApiJson = {
+  choices?: Array<{ message?: { content?: string } }>
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    total_tokens?: number
+    input_tokens?: number
+    output_tokens?: number
+  }
+  error?: { message?: string }
+  message?: string
+}
+
 const MAX_ATTEMPTS = 3
 const TOTAL_REQUEST_BUDGET_MS = 20 * 60 * 1000
 const MAX_SINGLE_ATTEMPT_MS = 10 * 60 * 1000
-const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 523, 524])
+const MAX_TRANSLATABLE_CHUNK_CHARS = 4_500
+
+const RETRYABLE_STATUS = new Set([
+  408,
+  425,
+  429,
+  500,
+  502,
+  503,
+  504,
+  520,
+  522,
+  523,
+  524,
+])
 
 function getChatCompletionsUrl(baseUrl: string) {
   const normalized = baseUrl.replace(/\/+$/, '')
@@ -86,7 +117,11 @@ function sleep(ms: number, signal?: AbortSignal) {
     const onAbort = () => {
       clearTimeout(timer)
       signal.removeEventListener('abort', onAbort)
-      reject(signal.reason instanceof Error ? signal.reason : new Error('Translation task was interrupted.'))
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new Error('Translation task was interrupted.'),
+      )
     }
 
     signal.addEventListener('abort', onAbort, { once: true })
@@ -113,7 +148,11 @@ function getRetryDelayMs(response: Response, attempt: number) {
   return 700 * 2 ** (attempt - 1)
 }
 
-async function fetchTranslationApi(url: string, init: RequestInit, externalSignal?: AbortSignal) {
+async function fetchTranslationApi(
+  url: string,
+  init: RequestInit,
+  externalSignal?: AbortSignal,
+) {
   const startedAt = Date.now()
   let lastError: unknown
 
@@ -144,7 +183,8 @@ async function fetchTranslationApi(url: string, init: RequestInit, externalSigna
       }
 
       const delayMs = getRetryDelayMs(response, attempt)
-      const budgetAfterResponse = TOTAL_REQUEST_BUDGET_MS - (Date.now() - startedAt)
+      const budgetAfterResponse =
+        TOTAL_REQUEST_BUDGET_MS - (Date.now() - startedAt)
 
       if (budgetAfterResponse <= delayMs + 2500) {
         return response
@@ -162,7 +202,8 @@ async function fetchTranslationApi(url: string, init: RequestInit, externalSigna
       if (attempt === MAX_ATTEMPTS) break
 
       const delayMs = 700 * 2 ** (attempt - 1)
-      const budgetAfterError = TOTAL_REQUEST_BUDGET_MS - (Date.now() - startedAt)
+      const budgetAfterError =
+        TOTAL_REQUEST_BUDGET_MS - (Date.now() - startedAt)
 
       if (budgetAfterError <= delayMs + 2500) break
 
@@ -170,8 +211,231 @@ async function fetchTranslationApi(url: string, init: RequestInit, externalSigna
     }
   }
 
-  const reason = lastError instanceof Error ? lastError.message : String(lastError ?? 'timeout')
-  throw new Error(`Translation API connection failed after retries: ${reason}`)
+  const reason =
+    lastError instanceof Error
+      ? lastError.message
+      : String(lastError ?? 'timeout')
+
+  throw new Error(
+    `Translation API connection failed after retries: ${reason}`,
+  )
+}
+
+function splitLargeTextBlock(text: string, maxChars: number) {
+  if (text.length <= maxChars) return [text]
+
+  const lines = text.split('\n')
+  const chunks: string[] = []
+  let current = ''
+
+  for (const line of lines) {
+    const candidate = current.length === 0 ? line : `${current}\n${line}`
+
+    if (candidate.length <= maxChars) {
+      current = candidate
+      continue
+    }
+
+    if (current.length > 0) {
+      chunks.push(current)
+      current = ''
+    }
+
+    if (line.length <= maxChars) {
+      current = line
+      continue
+    }
+
+    for (let offset = 0; offset < line.length; offset += maxChars) {
+      chunks.push(line.slice(offset, offset + maxChars))
+    }
+  }
+
+  if (current.length > 0) chunks.push(current)
+
+  return chunks
+}
+
+function splitMarkdownSegments(markdown: string): MarkdownSegment[] {
+  const lines = markdown.split('\n')
+  const rawSegments: MarkdownSegment[] = []
+  let buffer: string[] = []
+  let fenceBuffer: string[] = []
+  let inFence = false
+  let fenceMarker = ''
+
+  const flushTranslate = () => {
+    if (buffer.length === 0) return
+
+    const text = buffer.join('\n')
+    buffer = []
+
+    if (text.length === 0) {
+      rawSegments.push({ kind: 'verbatim', text })
+      return
+    }
+
+    for (const chunk of splitLargeTextBlock(
+      text,
+      MAX_TRANSLATABLE_CHUNK_CHARS,
+    )) {
+      rawSegments.push({ kind: 'translate', text: chunk })
+    }
+  }
+
+  const flushFence = () => {
+    if (fenceBuffer.length === 0) return
+    rawSegments.push({ kind: 'verbatim', text: fenceBuffer.join('\n') })
+    fenceBuffer = []
+  }
+
+  for (const line of lines) {
+    const fenceMatch = line.match(/^\s*(```+|~~~+)/)
+
+    if (!inFence && fenceMatch != null) {
+      flushTranslate()
+      inFence = true
+      fenceMarker = fenceMatch[1][0]
+      fenceBuffer.push(line)
+      continue
+    }
+
+    if (inFence) {
+      fenceBuffer.push(line)
+
+      if (fenceMatch != null && fenceMatch[1][0] === fenceMarker) {
+        inFence = false
+        fenceMarker = ''
+        flushFence()
+      }
+
+      continue
+    }
+
+    buffer.push(line)
+
+    if (
+      line.trim() === '' &&
+      buffer.join('\n').length >= MAX_TRANSLATABLE_CHUNK_CHARS * 0.65
+    ) {
+      flushTranslate()
+    }
+  }
+
+  if (inFence) flushFence()
+  flushTranslate()
+
+  const merged: MarkdownSegment[] = []
+
+  for (const segment of rawSegments) {
+    const previous = merged.at(-1)
+
+    if (
+      segment.kind === 'translate' &&
+      previous?.kind === 'translate' &&
+      previous.text.length + 2 + segment.text.length <=
+        MAX_TRANSLATABLE_CHUNK_CHARS
+    ) {
+      previous.text = `${previous.text}\n\n${segment.text}`
+      continue
+    }
+
+    merged.push(segment)
+  }
+
+  return merged
+}
+
+function getUsage(json: TranslationApiJson): Usage {
+  const promptTokens =
+    json.usage?.prompt_tokens ?? json.usage?.input_tokens ?? 0
+  const completionTokens =
+    json.usage?.completion_tokens ?? json.usage?.output_tokens ?? 0
+  const totalTokens =
+    json.usage?.total_tokens ?? promptTokens + completionTokens
+
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens,
+  }
+}
+
+async function translateChunk(input: {
+  baseUrl: string
+  apiKey: string
+  model: string
+  title: string
+  content: string
+  targetLanguageName: string
+  part: number
+  totalParts: number
+  signal?: AbortSignal
+}) {
+  const response = await fetchTranslationApi(
+    getChatCompletionsUrl(input.baseUrl),
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${input.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: input.model,
+        temperature: 0.2,
+        messages: [
+          {
+            role: 'system',
+            content: `You are a technical Markdown translator. Translate the supplied Chinese Markdown into ${input.targetLanguageName}.
+
+This is part ${input.part} of ${input.totalParts} of one article. Do not add part numbers, separators, summaries, introductions, or conclusions.
+
+Rules:
+- Preserve the Markdown structure exactly as much as possible.
+- Translate natural-language headings, paragraphs, table text, list text, blockquotes, and image alt text.
+- Do not translate inline code, shell commands, source code, environment variable names, identifiers, URLs, domains, IP addresses, file paths, or image URLs.
+- Fenced code blocks have already been removed from this request and will be restored verbatim.
+- Preserve custom image size suffixes such as |50%, |80%, |600px exactly.
+- Keep table pipes, list markers, heading markers, links, and Markdown syntax intact.
+- Do not add explanations or commentary.
+- Return exactly this format:
+<<<TITLE>>>
+translated article title only
+<<<CONTENT>>>
+translated Markdown chunk only`,
+          },
+          {
+            role: 'user',
+            content: `ARTICLE TITLE:\n${input.title}\n\nMARKDOWN CHUNK:\n${input.content}`,
+          },
+        ],
+      }),
+    },
+    input.signal,
+  )
+
+  const json = (await response.json().catch(() => null)) as
+    | TranslationApiJson
+    | null
+
+  if (!response.ok) {
+    throw new Error(
+      json?.error?.message ||
+        json?.message ||
+        `Translation API request failed: ${response.status}`,
+    )
+  }
+
+  const translatedText = json?.choices?.[0]?.message?.content?.trim()
+
+  if (translatedText == null || translatedText.length === 0) {
+    throw new Error('Translation API returned an empty response.')
+  }
+
+  return {
+    parsed: parseTranslatedResponse(translatedText, input.title),
+    usage: getUsage(json ?? {}),
+  }
 }
 
 export async function translateMarkdown(input: {
@@ -191,82 +455,89 @@ export async function translateMarkdown(input: {
     throw new Error('AI translation model is not configured or enabled.')
   }
 
-  const targetLanguageName = translationLanguageName[input.targetLanguage]
-  const response = await fetchTranslationApi(getChatCompletionsUrl(config.baseUrl), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.model,
-      temperature: 0.2,
-      messages: [
-        {
-          role: 'system',
-          content: `You are a technical Markdown translator. Translate the supplied Chinese blog article into ${targetLanguageName}.
+  throwIfAborted(input.signal)
 
-Rules:
-- Preserve the Markdown structure exactly as much as possible.
-- Translate natural-language headings, paragraphs, table text, list text, blockquotes, and image alt text.
-- Do not translate fenced code blocks, inline code, shell commands, source code, environment variable names, identifiers, URLs, domains, IP addresses, file paths, or image URLs.
-- Preserve custom image size suffixes such as |50%, |80%, |600px exactly.
-- Do not add explanations or commentary.
-- Return exactly this format:
-<<<TITLE>>>
-translated title only
-<<<CONTENT>>>
-translated complete Markdown body`,
-        },
-        {
-          role: 'user',
-          content: `TITLE:\n${input.title}\n\nMARKDOWN:\n${input.content}`,
-        },
-      ],
-    }),
-  }, input.signal)
+  const targetLanguageName =
+    translationLanguageName[input.targetLanguage]
+  const segments = splitMarkdownSegments(input.content)
+  const translatableSegments = segments.filter(
+    segment => segment.kind === 'translate' && segment.text.trim().length > 0,
+  )
+  const totalParts = Math.max(translatableSegments.length, 1)
+  let translatedTitle = input.title
+  let part = 0
+  const translatedSegments: string[] = []
+  const usage: Usage = {
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+  }
 
-  const json = (await response.json().catch(() => null)) as
-    | {
-        choices?: Array<{ message?: { content?: string } }>
-        usage?: {
-          prompt_tokens?: number
-          completion_tokens?: number
-          total_tokens?: number
-          input_tokens?: number
-          output_tokens?: number
-        }
-        error?: { message?: string }
-        message?: string
+  for (const segment of segments) {
+    throwIfAborted(input.signal)
+
+    if (segment.kind === 'verbatim' || segment.text.trim().length === 0) {
+      translatedSegments.push(segment.text)
+      continue
+    }
+
+    part += 1
+
+    try {
+      const result = await translateChunk({
+        baseUrl: config.baseUrl,
+        apiKey: config.apiKey,
+        model: config.model,
+        title: input.title,
+        content: segment.text,
+        targetLanguageName,
+        part,
+        totalParts,
+        signal: input.signal,
+      })
+
+      if (part === 1) {
+        translatedTitle = result.parsed.title
       }
-    | null
 
-  if (!response.ok) {
-    throw new Error(
-      json?.error?.message ||
-        json?.message ||
-        `Translation API request failed: ${response.status}`,
-    )
+      translatedSegments.push(result.parsed.content)
+      usage.promptTokens += result.usage.promptTokens
+      usage.completionTokens += result.usage.completionTokens
+      usage.totalTokens += result.usage.totalTokens
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : String(error)
+
+      throw new Error(
+        `Translation chunk ${part}/${totalParts} failed: ${message}`,
+        { cause: error },
+      )
+    }
   }
 
-  const translatedText = json?.choices?.[0]?.message?.content?.trim()
+  if (translatableSegments.length === 0) {
+    const titleOnly = await translateChunk({
+      baseUrl: config.baseUrl,
+      apiKey: config.apiKey,
+      model: config.model,
+      title: input.title,
+      content: '',
+      targetLanguageName,
+      part: 1,
+      totalParts: 1,
+      signal: input.signal,
+    })
 
-  if (translatedText == null || translatedText.length === 0) {
-    throw new Error('Translation API returned an empty response.')
+    translatedTitle = titleOnly.parsed.title
+    usage.promptTokens += titleOnly.usage.promptTokens
+    usage.completionTokens += titleOnly.usage.completionTokens
+    usage.totalTokens += titleOnly.usage.totalTokens
   }
-
-  const parsed = parseTranslatedResponse(translatedText, input.title)
-  const promptTokens = json?.usage?.prompt_tokens ?? json?.usage?.input_tokens ?? 0
-  const completionTokens = json?.usage?.completion_tokens ?? json?.usage?.output_tokens ?? 0
-  const totalTokens = json?.usage?.total_tokens ?? promptTokens + completionTokens
 
   return {
-    ...parsed,
+    title: translatedTitle,
+    content: translatedSegments.join('\n'),
     model: config.model,
-    usage: {
-      promptTokens,
-      completionTokens,
-      totalTokens,
-    },
+    usage,
   }
 }

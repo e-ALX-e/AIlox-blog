@@ -18,8 +18,8 @@ export type TranslationResult = {
 }
 
 const MAX_ATTEMPTS = 3
-const TOTAL_REQUEST_BUDGET_MS = 300_000
-const MAX_SINGLE_ATTEMPT_MS = 150_000
+const TOTAL_REQUEST_BUDGET_MS = 20 * 60 * 1000
+const MAX_SINGLE_ATTEMPT_MS = 10 * 60 * 1000
 const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 523, 524])
 
 function getChatCompletionsUrl(baseUrl: string) {

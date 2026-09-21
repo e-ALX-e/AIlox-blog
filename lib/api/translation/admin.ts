@@ -1,3 +1,4 @@
+import type { TranslationLanguage } from '@/lib/i18n/config'
 import { apiRequest } from '@/lib/infra/http/ky'
 
 export type TranslationUsageStats = {
@@ -22,6 +23,7 @@ export type TranslationAdminState = {
     hasApiKey: boolean
   }
   usage: TranslationUsageStats
+  publishedBlogIds: number[]
 }
 
 export async function getTranslationAdminState() {
@@ -47,20 +49,22 @@ export async function updateTranslationConfig(params: {
   })
 }
 
-export async function syncAllTranslations() {
+export async function syncTranslation(params: {
+  blogId: number
+  language: TranslationLanguage
+}) {
   return await apiRequest<{
     message: string
-    results: Array<unknown>
-    failures: Array<{
-      blogId: number
-      language: string
-      error: string
-    }>
-    translatedCount: number
+    result: {
+      attempted: boolean
+      translated: boolean
+      language: TranslationLanguage
+    }
     usage: TranslationUsageStats
   }>({
     url: 'admin/translation',
     method: 'POST',
-    timeout: 300_000,
+    json: params,
+    timeout: 110_000,
   })
 }

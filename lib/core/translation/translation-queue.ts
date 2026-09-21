@@ -1,19 +1,24 @@
 import 'server-only'
 
-import { asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray, lt, sql } from 'drizzle-orm'
 import { db } from '@/db/instance'
 import {
   blogs,
   blogTranslations,
   translationTasks,
 } from '@/db/schema'
-import { translationLanguages } from '@/lib/i18n/config'
+import {
+  translationLanguages,
+  type TranslationLanguage,
+} from '@/lib/i18n/config'
+import { getTranslationModelConfig } from '@/lib/infra/translation/config'
 import { syncBlogTranslation } from './sync-blog-translations'
 
 const ACTIVE_TASK_TTL_MS = 3 * 60 * 1000
 
 type QueueWorkerState = {
   promise: Promise<void> | null
+  controllers: Map<number, AbortController>
 }
 
 const globalQueueState = globalThis as typeof globalThis & {
@@ -22,28 +27,59 @@ const globalQueueState = globalThis as typeof globalThis & {
 
 const queueState =
   globalQueueState.__ailoxiTranslationQueueWorker ??
-  (globalQueueState.__ailoxiTranslationQueueWorker = { promise: null })
+  (globalQueueState.__ailoxiTranslationQueueWorker = {
+    promise: null,
+    controllers: new Map(),
+  })
 
-export async function enqueuePendingTranslationTasks() {
+async function recoverStaleProcessingTasks() {
+  const staleBefore = new Date(Date.now() - ACTIVE_TASK_TTL_MS)
+
+  await db
+    .update(translationTasks)
+    .set({
+      status: 'failed',
+      error: '上一次任务已中断或超时，可以继续执行。',
+      finishedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(translationTasks.status, 'processing'),
+        lt(translationTasks.updatedAt, staleBefore),
+      ),
+    )
+}
+
+async function ensureTasksForBlogs(blogIds?: number[]) {
+  await recoverStaleProcessingTasks()
+
   const publishedBlogs = await db
     .select({
       id: blogs.id,
       updatedAt: blogs.updatedAt,
     })
     .from(blogs)
-    .where(eq(blogs.isPublished, true))
+    .where(
+      blogIds != null && blogIds.length > 0
+        ? and(eq(blogs.isPublished, true), inArray(blogs.id, blogIds))
+        : eq(blogs.isPublished, true),
+    )
     .orderBy(blogs.id)
 
   if (publishedBlogs.length === 0) {
     return {
       queued: 0,
       alreadyProcessing: 0,
+      paused: 0,
+      canceled: 0,
+      failed: 0,
       upToDate: 0,
       total: 0,
     }
   }
 
-  const blogIds = publishedBlogs.map(blog => blog.id)
+  const ids = publishedBlogs.map(blog => blog.id)
   const [translations, existingTasks] = await Promise.all([
     db
       .select({
@@ -52,7 +88,7 @@ export async function enqueuePendingTranslationTasks() {
         sourceUpdatedAt: blogTranslations.sourceUpdatedAt,
       })
       .from(blogTranslations)
-      .where(inArray(blogTranslations.blogId, blogIds)),
+      .where(inArray(blogTranslations.blogId, ids)),
     db
       .select({
         id: translationTasks.id,
@@ -60,10 +96,11 @@ export async function enqueuePendingTranslationTasks() {
         language: translationTasks.language,
         sourceUpdatedAt: translationTasks.sourceUpdatedAt,
         status: translationTasks.status,
+        attempts: translationTasks.attempts,
         updatedAt: translationTasks.updatedAt,
       })
       .from(translationTasks)
-      .where(inArray(translationTasks.blogId, blogIds)),
+      .where(inArray(translationTasks.blogId, ids)),
   ])
 
   const translationByKey = new Map(
@@ -78,6 +115,9 @@ export async function enqueuePendingTranslationTasks() {
 
   let queued = 0
   let alreadyProcessing = 0
+  let paused = 0
+  let canceled = 0
+  let failed = 0
   let upToDate = 0
 
   for (const blog of publishedBlogs) {
@@ -94,44 +134,40 @@ export async function enqueuePendingTranslationTasks() {
 
       const taskKey = `${blog.id}:${language}:${blog.updatedAt.getTime()}`
       const existingTask = taskBySourceKey.get(taskKey)
-      const processingIsFresh =
-        existingTask?.status === 'processing' &&
-        Date.now() - existingTask.updatedAt.getTime() < ACTIVE_TASK_TTL_MS
 
-      if (processingIsFresh) {
-        alreadyProcessing += 1
+      if (existingTask != null) {
+        if (existingTask.status === 'processing') alreadyProcessing += 1
+        else if (existingTask.status === 'paused') paused += 1
+        else if (existingTask.status === 'canceled') canceled += 1
+        else if (existingTask.status === 'failed') failed += 1
+        else if (existingTask.status === 'queued') queued += 1
+        else {
+          await db
+            .update(translationTasks)
+            .set({
+              status: 'queued',
+              error: null,
+              finishedAt: null,
+              updatedAt: new Date(),
+            })
+            .where(eq(translationTasks.id, existingTask.id))
+          queued += 1
+        }
+
         continue
       }
 
-      const now = new Date()
-
-      await db
-        .insert(translationTasks)
-        .values({
-          blogId: blog.id,
-          language,
-          sourceUpdatedAt: blog.updatedAt,
-          status: 'queued',
-          attempts: existingTask?.attempts ?? 0,
-          error: null,
-          startedAt: null,
-          finishedAt: null,
-          updatedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: [
-            translationTasks.blogId,
-            translationTasks.language,
-            translationTasks.sourceUpdatedAt,
-          ],
-          set: {
-            status: 'queued',
-            error: null,
-            startedAt: null,
-            finishedAt: null,
-            updatedAt: now,
-          },
-        })
+      await db.insert(translationTasks).values({
+        blogId: blog.id,
+        language,
+        sourceUpdatedAt: blog.updatedAt,
+        status: 'queued',
+        attempts: 0,
+        error: null,
+        startedAt: null,
+        finishedAt: null,
+        updatedAt: new Date(),
+      })
 
       queued += 1
     }
@@ -140,35 +176,89 @@ export async function enqueuePendingTranslationTasks() {
   return {
     queued,
     alreadyProcessing,
+    paused,
+    canceled,
+    failed,
     upToDate,
     total: publishedBlogs.length * translationLanguages.length,
   }
 }
 
-async function getNextQueuedTask() {
-  return await db
-    .select({
-      id: translationTasks.id,
-      blogId: translationTasks.blogId,
-      language: translationTasks.language,
-    })
-    .from(translationTasks)
-    .where(eq(translationTasks.status, 'queued'))
-    .orderBy(asc(translationTasks.createdAt), asc(translationTasks.id))
-    .limit(1)
-    .then(rows => rows[0] ?? null)
+export async function enqueuePendingTranslationTasks() {
+  return await ensureTasksForBlogs()
+}
+
+export async function enqueueBlogTranslationTasks(blogId: number) {
+  return await ensureTasksForBlogs([blogId])
+}
+
+async function claimNextQueuedTask() {
+  while (true) {
+    const task = await db
+      .select({
+        id: translationTasks.id,
+        blogId: translationTasks.blogId,
+        language: translationTasks.language,
+      })
+      .from(translationTasks)
+      .where(eq(translationTasks.status, 'queued'))
+      .orderBy(asc(translationTasks.createdAt), asc(translationTasks.id))
+      .limit(1)
+      .then(rows => rows[0] ?? null)
+
+    if (task == null) return null
+
+    const now = new Date()
+    const [claimed] = await db
+      .update(translationTasks)
+      .set({
+        status: 'processing',
+        attempts: sql`${translationTasks.attempts} + 1`,
+        error: null,
+        startedAt: now,
+        finishedAt: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(translationTasks.id, task.id),
+          eq(translationTasks.status, 'queued'),
+        ),
+      )
+      .returning({
+        id: translationTasks.id,
+        blogId: translationTasks.blogId,
+        language: translationTasks.language,
+      })
+
+    if (claimed != null) return claimed
+  }
 }
 
 async function processQueue() {
+  const config = await getTranslationModelConfig()
+
+  if (!config.enabled || config.apiKey == null) {
+    return
+  }
+
   while (true) {
-    const task = await getNextQueuedTask()
+    const task = await claimNextQueuedTask()
 
     if (task == null) return
+
+    const controller = new AbortController()
+    queueState.controllers.set(task.id, controller)
 
     try {
       await syncBlogTranslation(
         task.blogId,
-        task.language as (typeof translationLanguages)[number],
+        task.language as TranslationLanguage,
+        {
+          taskId: task.id,
+          taskAlreadyClaimed: true,
+          signal: controller.signal,
+        },
       )
     } catch (error) {
       console.error('[translation] queued task failed', {
@@ -177,6 +267,8 @@ async function processQueue() {
         language: task.language,
         error: error instanceof Error ? error.message : String(error),
       })
+    } finally {
+      queueState.controllers.delete(task.id)
     }
   }
 }
@@ -195,4 +287,102 @@ export function startTranslationQueueWorker() {
 
 export function isTranslationQueueWorkerRunning() {
   return queueState.promise != null
+}
+
+function abortTask(taskId: number, reason: string) {
+  const controller = queueState.controllers.get(taskId)
+
+  if (controller != null && !controller.signal.aborted) {
+    controller.abort(new Error(reason))
+  }
+}
+
+function normalizeTaskIds(taskIds: number[]) {
+  return [...new Set(taskIds.filter(id => Number.isInteger(id) && id > 0))]
+}
+
+export async function pauseTranslationTasks(taskIds: number[]) {
+  const ids = normalizeTaskIds(taskIds)
+  if (ids.length === 0) return []
+
+  const now = new Date()
+  const changed = await db
+    .update(translationTasks)
+    .set({
+      status: 'paused',
+      error: null,
+      finishedAt: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        inArray(translationTasks.id, ids),
+        inArray(translationTasks.status, ['queued', 'processing']),
+      ),
+    )
+    .returning({ id: translationTasks.id })
+
+  for (const task of changed) {
+    abortTask(task.id, 'Translation task paused by administrator.')
+  }
+
+  return changed.map(task => task.id)
+}
+
+export async function resumeTranslationTasks(taskIds: number[]) {
+  const ids = normalizeTaskIds(taskIds)
+  if (ids.length === 0) return []
+
+  const now = new Date()
+  const changed = await db
+    .update(translationTasks)
+    .set({
+      status: 'queued',
+      error: null,
+      startedAt: null,
+      finishedAt: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        inArray(translationTasks.id, ids),
+        inArray(translationTasks.status, ['paused', 'failed', 'canceled']),
+      ),
+    )
+    .returning({ id: translationTasks.id })
+
+  return changed.map(task => task.id)
+}
+
+export async function cancelTranslationTasks(taskIds: number[]) {
+  const ids = normalizeTaskIds(taskIds)
+  if (ids.length === 0) return []
+
+  const now = new Date()
+  const changed = await db
+    .update(translationTasks)
+    .set({
+      status: 'canceled',
+      error: null,
+      finishedAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        inArray(translationTasks.id, ids),
+        inArray(translationTasks.status, [
+          'queued',
+          'processing',
+          'paused',
+          'failed',
+        ]),
+      ),
+    )
+    .returning({ id: translationTasks.id })
+
+  for (const task of changed) {
+    abortTask(task.id, 'Translation task canceled by administrator.')
+  }
+
+  return changed.map(task => task.id)
 }

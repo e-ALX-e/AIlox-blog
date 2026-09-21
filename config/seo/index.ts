@@ -196,7 +196,7 @@ const baseSeoMetadata = {
     articleDescription: (title: string) =>
       `Read "${title}" on Ailoxi's blog.`,
   },
-} as const
+}
 
 export const seoMetadata = {
   zh: baseSeoMetadata.zh,

@@ -51,6 +51,12 @@ export async function syncAllTranslations() {
   return await apiRequest<{
     message: string
     results: Array<unknown>
+    failures: Array<{
+      blogId: number
+      language: string
+      error: string
+    }>
+    translatedCount: number
     usage: TranslationUsageStats
   }>({
     url: 'admin/translation',

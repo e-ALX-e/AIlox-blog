@@ -4,7 +4,10 @@ import { blogs, blogTranslations, translationTasks } from '@/db/schema'
 import { BadRequestError } from '@/lib/common/errors/request'
 import { noPermission } from '@/lib/core/auth/guard'
 import { syncBlogTranslation } from '@/lib/core/translation/sync-blog-translations'
-import { isTranslationQueueWorkerRunning } from '@/lib/core/translation/translation-queue'
+import {
+  enqueuePendingTranslationTasks,
+  isTranslationQueueWorkerRunning,
+} from '@/lib/core/translation/translation-queue'
 import { translationLanguages } from '@/lib/i18n/config'
 import { readJsonBody } from '@/lib/infra/http/read-json-body'
 import { withResponse } from '@/lib/infra/http/with-response'
@@ -14,8 +17,6 @@ import {
   saveTranslationModelConfig,
 } from '@/lib/infra/translation/config'
 import { syncTranslationSchema, updateTranslationConfigSchema } from './schema'
-
-const ACTIVE_TASK_TTL_MS = 3 * 60 * 1000
 
 function hasPostgresErrorCode(error: unknown, expectedCode: string) {
   let current: unknown = error
@@ -37,6 +38,18 @@ export const GET = withResponse(async () => {
     throw new BadRequestError('Insufficient permissions.')
   }
 
+  try {
+    await enqueuePendingTranslationTasks()
+  } catch (error) {
+    if (hasPostgresErrorCode(error, '42P01')) {
+      throw new BadRequestError(
+        '翻译任务表尚未创建。请在服务器执行 docker compose --profile tools run --rm db-init，然后重启 app。',
+      )
+    }
+
+    throw error
+  }
+
   const [config, usage, publishedBlogs] = await Promise.all([
     getPublicTranslationModelConfig(),
     getTranslationUsageStats(),
@@ -52,63 +65,37 @@ export const GET = withResponse(async () => {
   ])
 
   const blogIds = publishedBlogs.map(blog => blog.id)
-  let existingTranslations: Array<{
-    blogId: number
-    language: string
-    sourceUpdatedAt: Date
-  }> = []
-  let taskRows: Array<{
-    id: number
-    blogId: number
-    language: string
-    sourceUpdatedAt: Date
-    status: string
-    attempts: number
-    error: string | null
-    startedAt: Date | null
-    finishedAt: Date | null
-    updatedAt: Date
-  }> = []
-
-  if (blogIds.length > 0) {
-    try {
-      ;[existingTranslations, taskRows] = await Promise.all([
-        db
-          .select({
-            blogId: blogTranslations.blogId,
-            language: blogTranslations.language,
-            sourceUpdatedAt: blogTranslations.sourceUpdatedAt,
-          })
-          .from(blogTranslations)
-          .where(inArray(blogTranslations.blogId, blogIds)),
-        db
-          .select({
-            id: translationTasks.id,
-            blogId: translationTasks.blogId,
-            language: translationTasks.language,
-            sourceUpdatedAt: translationTasks.sourceUpdatedAt,
-            status: translationTasks.status,
-            attempts: translationTasks.attempts,
-            error: translationTasks.error,
-            startedAt: translationTasks.startedAt,
-            finishedAt: translationTasks.finishedAt,
-            updatedAt: translationTasks.updatedAt,
-          })
-          .from(translationTasks)
-          .where(inArray(translationTasks.blogId, blogIds))
-          .orderBy(desc(translationTasks.updatedAt))
-          .limit(100),
-      ])
-    } catch (error) {
-      if (hasPostgresErrorCode(error, '42P01')) {
-        throw new BadRequestError(
-          '翻译任务表尚未创建。请在服务器执行 docker compose --profile tools run --rm db-init，然后重启 app。',
-        )
-      }
-
-      throw error
-    }
-  }
+  const [existingTranslations, taskRows] =
+    blogIds.length === 0
+      ? [[], []]
+      : await Promise.all([
+          db
+            .select({
+              blogId: blogTranslations.blogId,
+              language: blogTranslations.language,
+              sourceUpdatedAt: blogTranslations.sourceUpdatedAt,
+            })
+            .from(blogTranslations)
+            .where(inArray(blogTranslations.blogId, blogIds)),
+          db
+            .select({
+              id: translationTasks.id,
+              blogId: translationTasks.blogId,
+              language: translationTasks.language,
+              sourceUpdatedAt: translationTasks.sourceUpdatedAt,
+              status: translationTasks.status,
+              attempts: translationTasks.attempts,
+              error: translationTasks.error,
+              startedAt: translationTasks.startedAt,
+              finishedAt: translationTasks.finishedAt,
+              createdAt: translationTasks.createdAt,
+              updatedAt: translationTasks.updatedAt,
+            })
+            .from(translationTasks)
+            .where(inArray(translationTasks.blogId, blogIds))
+            .orderBy(desc(translationTasks.updatedAt))
+            .limit(200),
+        ])
 
   const translationByKey = new Map(
     existingTranslations.map(translation => [
@@ -121,9 +108,7 @@ export const GET = withResponse(async () => {
 
   for (const task of taskRows) {
     const blog = blogById.get(task.blogId)
-    if (blog == null) continue
-
-    if (task.sourceUpdatedAt.getTime() !== blog.updatedAt.getTime()) continue
+    if (blog == null || task.sourceUpdatedAt.getTime() !== blog.updatedAt.getTime()) continue
 
     const key = `${task.blogId}:${task.language}`
     if (!taskByCurrentSourceKey.has(key)) {
@@ -138,35 +123,24 @@ export const GET = withResponse(async () => {
 
       if (
         translation != null &&
-        new Date(translation.sourceUpdatedAt).getTime() >= blog.updatedAt.getTime()
+        translation.sourceUpdatedAt.getTime() >= blog.updatedAt.getTime()
       ) {
         return []
       }
 
       const task = taskByCurrentSourceKey.get(key)
-      const processingIsStale =
-        task?.status === 'processing' &&
-        Date.now() - task.updatedAt.getTime() >= ACTIVE_TASK_TTL_MS
-      const status =
-        task == null
-          ? 'queued'
-          : processingIsStale
-            ? 'failed'
-            : task.status === 'succeeded' || task.status === 'skipped'
-              ? 'queued'
-              : task.status
+      if (task == null) return []
 
       return [
         {
+          taskId: task.id,
           blogId: blog.id,
           blogTitle: blog.title,
           language,
-          status,
-          attempts: task?.attempts ?? 0,
-          error: processingIsStale
-            ? '上一次任务已中断或超时，可以重新同步。'
-            : task?.error ?? null,
-          updatedAt: task?.updatedAt ?? null,
+          status: task.status,
+          attempts: task.attempts,
+          error: task.error,
+          updatedAt: task.updatedAt,
         },
       ]
     }),
@@ -176,7 +150,9 @@ export const GET = withResponse(async () => {
   const taskSummary = {
     queued: pendingJobs.filter(job => job.status === 'queued').length,
     processing: pendingJobs.filter(job => job.status === 'processing').length,
+    paused: pendingJobs.filter(job => job.status === 'paused').length,
     failed: pendingJobs.filter(job => job.status === 'failed').length,
+    canceled: pendingJobs.filter(job => job.status === 'canceled').length,
     upToDate: totalTranslationSlots - pendingJobs.length,
   }
 
@@ -256,16 +232,24 @@ export const POST = withResponse(async request => {
   try {
     const result = await syncBlogTranslation(parsed.data.blogId, parsed.data.language)
 
-    if (!result.attempted && !result.translated && !result.skipped && !result.inProgress) {
+    if (
+      !result.attempted &&
+      !result.translated &&
+      !result.skipped &&
+      !result.inProgress &&
+      !result.controlled
+    ) {
       throw new BadRequestError('文章不存在、未发布或翻译模型未启用。')
     }
 
     return {
-      message: result.inProgress
-        ? 'Translation is already processing.'
-        : result.skipped
-          ? 'Translation is already up to date.'
-          : 'Translation completed.',
+      message: result.controlled
+        ? 'Translation task is paused or canceled.'
+        : result.inProgress
+          ? 'Translation is already processing.'
+          : result.skipped
+            ? 'Translation is already up to date.'
+            : 'Translation completed.',
       result,
       usage: await getTranslationUsageStats(),
     }

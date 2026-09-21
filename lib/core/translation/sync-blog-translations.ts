@@ -38,6 +38,7 @@ type SyncBlogTranslationOptions = {
   signal?: AbortSignal
   taskId?: number
   taskAlreadyClaimed?: boolean
+  force?: boolean
 }
 
 async function getTaskStatus(taskId: number) {
@@ -97,6 +98,7 @@ export async function syncBlogTranslation(
     .then(rows => rows[0])
 
   if (
+    !options.force &&
     existingTranslation != null &&
     existingTranslation.sourceUpdatedAt.getTime() >= blog.updatedAt.getTime()
   ) {
@@ -164,6 +166,7 @@ export async function syncBlogTranslation(
         language,
         sourceUpdatedAt: blog.updatedAt,
         status: 'processing',
+        force: options.force ?? false,
         attempts: 1,
         error: null,
         startedAt: now,
@@ -178,6 +181,7 @@ export async function syncBlogTranslation(
         ],
         set: {
           status: 'processing',
+          force: options.force ?? false,
           attempts: sql`${translationTasks.attempts} + 1`,
           error: null,
           startedAt: now,
@@ -248,6 +252,7 @@ export async function syncBlogTranslation(
         .update(translationTasks)
         .set({
           status: 'succeeded',
+          force: false,
           error: null,
           finishedAt,
           updatedAt: finishedAt,

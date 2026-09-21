@@ -7,3 +7,4 @@ export {
   siteCommentTargetTypeEnum,
 } from './schema/comment'
 export { friendLinkStateEnum, friendLinks } from './schema/friend-link'
+export { blogTranslations, translationModelConfig, translationUsage } from './schema/translation'

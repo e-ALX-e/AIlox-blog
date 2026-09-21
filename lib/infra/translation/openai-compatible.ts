@@ -153,7 +153,6 @@ export async function translateMarkdown(input: {
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey}`,
-      Connection: 'keep-alive',
     },
     body: JSON.stringify({
       model: config.model,

@@ -15,7 +15,7 @@ import { sileo } from 'sileo'
 import {
   controlTranslationTasks,
   getTranslationAdminState,
-  retranslateBlogLanguage,
+  retranslateBlogLanguages,
   runTranslationQueue,
   type TranslationAdminState,
   type TranslationJob,
@@ -116,8 +116,10 @@ export function AdminTranslationPage() {
   const [taskSummary, setTaskSummary] = useState(emptyTaskSummary)
   const [recentTasks, setRecentTasks] = useState<TranslationAdminState['recentTasks']>([])
   const [publishedBlogs, setPublishedBlogs] = useState<TranslationAdminState['publishedBlogs']>([])
-  const [selectedBlogId, setSelectedBlogId] = useState('')
-  const [selectedLanguage, setSelectedLanguage] = useState<TranslationLanguage>('en')
+  const [selectedBlogIds, setSelectedBlogIds] = useState<Set<number>>(new Set())
+  const [selectedLanguages, setSelectedLanguages] = useState<Set<TranslationLanguage>>(
+    new Set(['en']),
+  )
   const [queueWorkerRunning, setQueueWorkerRunning] = useState(false)
   const [skippedUpToDateCount, setSkippedUpToDateCount] = useState(0)
   const [totalTranslationSlots, setTotalTranslationSlots] = useState(0)
@@ -138,9 +140,16 @@ export function AdminTranslationPage() {
     setTaskSummary(data.taskSummary)
     setRecentTasks(data.recentTasks)
     setPublishedBlogs(data.publishedBlogs)
-    setSelectedBlogId(previous =>
-      previous || (data.publishedBlogs[0] != null ? String(data.publishedBlogs[0].id) : ''),
-    )
+    setSelectedBlogIds(previous => {
+      if (previous.size > 0) {
+        const availableIds = new Set(data.publishedBlogs.map(blog => blog.id))
+        return new Set([...previous].filter(id => availableIds.has(id)))
+      }
+
+      return data.publishedBlogs[0] != null
+        ? new Set([data.publishedBlogs[0].id])
+        : new Set()
+    })
     setQueueWorkerRunning(data.queueWorkerRunning)
     setSkippedUpToDateCount(data.skippedUpToDateCount)
     setTotalTranslationSlots(data.totalTranslationSlots)
@@ -260,29 +269,57 @@ export function AdminTranslationPage() {
     }
   }
 
-  const retranslateOne = async () => {
-    const blogId = Number(selectedBlogId)
+  const toggleRetranslateBlog = (blogId: number) => {
+    setSelectedBlogIds(previous => {
+      const next = new Set(previous)
 
-    if (!Number.isInteger(blogId) || blogId <= 0) {
-      sileo.info({ title: '请选择要重新翻译的博客' })
+      if (next.has(blogId)) next.delete(blogId)
+      else next.add(blogId)
+
+      return next
+    })
+  }
+
+  const toggleRetranslateLanguage = (language: TranslationLanguage) => {
+    setSelectedLanguages(previous => {
+      const next = new Set(previous)
+
+      if (next.has(language)) next.delete(language)
+      else next.add(language)
+
+      return next
+    })
+  }
+
+  const retranslateSelected = async () => {
+    const blogIds = [...selectedBlogIds]
+    const languages = [...selectedLanguages]
+
+    if (blogIds.length === 0) {
+      sileo.info({ title: '请至少选择一篇博客' })
+      return
+    }
+
+    if (languages.length === 0) {
+      sileo.info({ title: '请至少选择一种目标语言' })
       return
     }
 
     setIsRetranslating(true)
 
     try {
-      await retranslateBlogLanguage({
-        blogId,
-        language: selectedLanguage,
+      const response = await retranslateBlogLanguages({
+        blogIds,
+        languages,
       })
       await loadState()
 
-      const blogTitle =
-        publishedBlogs.find(blog => blog.id === blogId)?.title ?? `#${blogId}`
-
       sileo.success({
         title: '已加入重新翻译队列',
-        description: `${blogTitle} · ${languageDisplayName[selectedLanguage]}`,
+        description:
+          response.failures.length === 0
+            ? `已创建 ${response.tasks.length} 个重新翻译任务`
+            : `成功 ${response.tasks.length} 个，失败 ${response.failures.length} 个`,
       })
     } catch (error) {
       sileo.error({
@@ -456,58 +493,125 @@ export function AdminTranslationPage() {
         <div className="mb-4">
           <h2 className="font-semibold text-lg">指定语言重新翻译</h2>
           <p className="mt-1 text-muted-foreground text-sm">
-            以简体中文博客原文作为唯一基准，强制重新生成指定语言版本。中文原文中已有的英文技术词、产品名、缩写等默认保持英文，只有确有必要时才翻译。
+            以简体中文博客原文作为唯一基准，支持博客和目标语言多选/全选。中文原文中已有的英文技术词、产品名、缩写等默认保持英文，只有确有必要时才翻译。
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end">
-          <div className="grid gap-2">
-            <Label htmlFor="retranslate-blog">博客</Label>
-            <select
-              id="retranslate-blog"
-              value={selectedBlogId}
-              onChange={event => setSelectedBlogId(event.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
-            >
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-lg border bg-background/50 p-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <Label>博客</Label>
+              <div className="flex gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    setSelectedBlogIds(new Set(publishedBlogs.map(blog => blog.id)))
+                  }
+                  disabled={publishedBlogs.length === 0}
+                >
+                  全选
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedBlogIds(new Set())}
+                  disabled={selectedBlogIds.size === 0}
+                >
+                  清空
+                </Button>
+              </div>
+            </div>
+
+            <div className="max-h-52 space-y-1 overflow-y-auto pr-1">
               {publishedBlogs.length === 0 ? (
-                <option value="">暂无已发布博客</option>
+                <p className="py-6 text-center text-muted-foreground text-sm">
+                  暂无已发布博客
+                </p>
               ) : (
                 publishedBlogs.map(blog => (
-                  <option key={blog.id} value={String(blog.id)}>
-                    #{blog.id} {blog.title}
-                  </option>
+                  <label
+                    key={blog.id}
+                    className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedBlogIds.has(blog.id)}
+                      onChange={() => toggleRetranslateBlog(blog.id)}
+                      className="mt-0.5 size-4 accent-black dark:accent-white"
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm" title={blog.title}>
+                      #{blog.id} {blog.title}
+                    </span>
+                  </label>
                 ))
               )}
-            </select>
+            </div>
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="retranslate-language">目标语言</Label>
-            <select
-              id="retranslate-language"
-              value={selectedLanguage}
-              onChange={event =>
-                setSelectedLanguage(event.target.value as TranslationLanguage)
-              }
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
-            >
+          <div className="rounded-lg border bg-background/50 p-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <Label>目标语言</Label>
+              <div className="flex gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    setSelectedLanguages(new Set(translationLanguages))
+                  }
+                >
+                  全选
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedLanguages(new Set())}
+                  disabled={selectedLanguages.size === 0}
+                >
+                  清空
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid gap-1 sm:grid-cols-2">
               {translationLanguages.map(language => (
-                <option key={language} value={language}>
-                  {languageDisplayName[language]}
-                </option>
+                <label
+                  key={language}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedLanguages.has(language)}
+                    onChange={() => toggleRetranslateLanguage(language)}
+                    className="size-4 accent-black dark:accent-white"
+                  />
+                  <span className="text-sm">{languageDisplayName[language]}</span>
+                </label>
               ))}
-            </select>
+            </div>
           </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-muted-foreground text-xs">
+            已选 {selectedBlogIds.size} 篇博客 × {selectedLanguages.size} 种语言 ={' '}
+            {selectedBlogIds.size * selectedLanguages.size} 个任务
+          </p>
 
           <Button
             type="button"
             variant="outline"
-            onClick={() => void retranslateOne()}
+            onClick={() => void retranslateSelected()}
             disabled={
               isRetranslating ||
               !enabled ||
               !hasApiKey ||
-              selectedBlogId.length === 0
+              selectedBlogIds.size === 0 ||
+              selectedLanguages.size === 0
             }
           >
             {isRetranslating ? (
@@ -515,7 +619,7 @@ export function AdminTranslationPage() {
             ) : (
               <RefreshCcw className="size-4" />
             )}
-            重新翻译
+            批量重新翻译
           </Button>
         </div>
       </section>

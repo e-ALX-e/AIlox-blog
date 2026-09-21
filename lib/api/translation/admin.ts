@@ -156,17 +156,22 @@ export async function controlTranslationTasks(params: {
 }
 
 
-export async function retranslateBlogLanguage(params: {
-  blogId: number
-  language: TranslationLanguage
+export async function retranslateBlogLanguages(params: {
+  blogIds: number[]
+  languages: TranslationLanguage[]
 }) {
   return await apiRequest<{
     message: string
-    task: {
+    tasks: Array<{
       id: number
       blogId: number
       language: TranslationLanguage
-    }
+    }>
+    failures: Array<{
+      blogId: number
+      language: TranslationLanguage
+      error: string
+    }>
   }>({
     url: 'admin/translation/retranslate',
     method: 'POST',

@@ -39,7 +39,7 @@ async function recoverStaleProcessingTasks() {
     .update(translationTasks)
     .set({
       status: 'failed',
-      error: '上一次任务已中断或超时，可以继续执行。',
+      error: '翻译任务执行器超过 3 分钟没有心跳，已判定为中断。可以继续执行。',
       finishedAt: new Date(),
       updatedAt: new Date(),
     })

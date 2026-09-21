@@ -1,19 +1,16 @@
 'use client'
 
 import { Eye, EyeOff, Loader2, RefreshCcw, Save } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { sileo } from 'sileo'
 import {
   getTranslationAdminState,
-  syncTranslation,
+  runTranslationQueue,
   type TranslationAdminState,
   type TranslationJob,
   updateTranslationConfig,
 } from '@/lib/api/translation/admin'
-import {
-  languageDisplayName,
-  type TranslationLanguage,
-} from '@/lib/i18n/config'
+import { languageDisplayName } from '@/lib/i18n/config'
 import { cn } from '@/lib/utils/common/shadcn'
 import { Button } from '@/ui/shadcn/button'
 import { Input } from '@/ui/shadcn/input'
@@ -33,12 +30,6 @@ const emptyTaskSummary: TranslationAdminState['taskSummary'] = {
   processing: 0,
   failed: 0,
   upToDate: 0,
-}
-
-type SyncFailure = {
-  blogId: number
-  language: TranslationLanguage
-  error: string
 }
 
 const taskStatusText: Record<string, string> = {
@@ -84,15 +75,11 @@ export function AdminTranslationPage() {
   const [pendingJobs, setPendingJobs] = useState<TranslationJob[]>([])
   const [taskSummary, setTaskSummary] = useState(emptyTaskSummary)
   const [recentTasks, setRecentTasks] = useState<TranslationAdminState['recentTasks']>([])
+  const [queueWorkerRunning, setQueueWorkerRunning] = useState(false)
   const [skippedUpToDateCount, setSkippedUpToDateCount] = useState(0)
   const [totalTranslationSlots, setTotalTranslationSlots] = useState(0)
-  const [syncDone, setSyncDone] = useState(0)
-  const [syncTotal, setSyncTotal] = useState(0)
 
-  const runnableJobs = useMemo(
-    () => pendingJobs.filter(job => job.status !== 'processing'),
-    [pendingJobs],
-  )
+  const runnableJobs = pendingJobs.filter(job => job.status !== 'processing')
 
   const applyState = (data: TranslationAdminState) => {
     setEnabled(data.config.enabled)
@@ -103,6 +90,7 @@ export function AdminTranslationPage() {
     setPendingJobs(data.pendingJobs)
     setTaskSummary(data.taskSummary)
     setRecentTasks(data.recentTasks)
+    setQueueWorkerRunning(data.queueWorkerRunning)
     setSkippedUpToDateCount(data.skippedUpToDateCount)
     setTotalTranslationSlots(data.totalTranslationSlots)
   }
@@ -168,17 +156,15 @@ export function AdminTranslationPage() {
   }
 
   const syncAll = async () => {
-    const jobs = [...runnableJobs]
-
-    if (taskSummary.processing > 0) {
+    if (queueWorkerRunning || taskSummary.processing > 0) {
       sileo.info({
-        title: '已有翻译任务正在执行',
-        description: '任务完成或超时后，队列会自动刷新，请不要重复提交。',
+        title: '翻译队列正在运行',
+        description: '后台会继续处理剩余任务，可以离开此页面，无需重复提交。',
       })
       return
     }
 
-    if (jobs.length === 0) {
+    if (runnableJobs.length === 0) {
       sileo.success({
         title: '所有翻译均为最新',
         description: `已确认 ${skippedUpToDateCount} 个语言版本没有变化`,
@@ -187,56 +173,19 @@ export function AdminTranslationPage() {
     }
 
     setIsSyncing(true)
-    setSyncDone(0)
-    setSyncTotal(jobs.length)
-
-    const failures: SyncFailure[] = []
-    let translatedCount = 0
-    let skippedDuringRun = 0
 
     try {
-      for (const job of jobs) {
-        try {
-          const response = await syncTranslation({
-            blogId: job.blogId,
-            language: job.language,
-          })
+      const response = await runTranslationQueue()
+      await loadState()
 
-          if (response.result.translated) translatedCount += 1
-          if (response.result.skipped || response.result.inProgress) skippedDuringRun += 1
-        } catch (error) {
-          failures.push({
-            blogId: job.blogId,
-            language: job.language,
-            error: error instanceof Error ? error.message : String(error),
-          })
-        } finally {
-          setSyncDone(value => value + 1)
-          await loadState().catch(() => undefined)
-        }
-      }
-
-      const freshState = await loadState()
-
-      if (failures.length > 0) {
-        const preview = failures
-          .slice(0, 3)
-          .map(
-            item =>
-              `#${item.blogId} ${languageDisplayName[item.language]}: ${item.error}`,
-          )
-          .join('；')
-
-        sileo.error({
-          title: `翻译完成，但有 ${failures.length} 个任务失败`,
-          description: `成功 ${translatedCount}，跳过 ${skippedDuringRun}。仍有 ${freshState.pendingJobs.length} 个待更新。 ${preview}`,
-        })
-      } else {
-        sileo.success({
-          title: '翻译同步完成',
-          description: `新翻译 ${translatedCount} 个，已是最新 ${freshState.taskSummary.upToDate} 个，总 Token ${freshState.usage.totalTokens.toLocaleString()}`,
-        })
-      }
+      sileo.success({
+        title: '翻译队列已启动',
+        description: `新排队 ${response.queue.queued} 个，已是最新 ${response.queue.upToDate} 个。任务会在服务器后台串行执行。`,
+      })
+    } catch (error) {
+      sileo.error({
+        title: error instanceof Error ? error.message : '启动翻译队列失败',
+      })
     } finally {
       setIsSyncing(false)
     }
@@ -251,7 +200,9 @@ export function AdminTranslationPage() {
   }
 
   const progressPercent =
-    syncTotal > 0 ? Math.min(100, Math.round((syncDone / syncTotal) * 100)) : 0
+    totalTranslationSlots > 0
+      ? Math.min(100, Math.round((taskSummary.upToDate / totalTranslationSlots) * 100))
+      : 100
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 py-4 pb-12">
@@ -342,21 +293,22 @@ export function AdminTranslationPage() {
               isSyncing ||
               !enabled ||
               !hasApiKey ||
+              queueWorkerRunning ||
               taskSummary.processing > 0 ||
               runnableJobs.length === 0
             }
           >
-            {isSyncing || taskSummary.processing > 0 ? (
+            {isSyncing || queueWorkerRunning || taskSummary.processing > 0 ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
               <RefreshCcw className="size-4" />
             )}
             {isSyncing
-              ? `翻译中 ${syncDone}/${syncTotal}`
-              : taskSummary.processing > 0
-                ? `已有任务处理中（${taskSummary.processing}）`
+              ? '正在启动队列...'
+              : queueWorkerRunning || taskSummary.processing > 0
+                ? `后台处理中（${taskSummary.processing}）`
                 : runnableJobs.length > 0
-                  ? `同步待更新翻译（${runnableJobs.length}）`
+                  ? `启动待更新队列（${runnableJobs.length}）`
                   : '翻译已是最新'}
           </Button>
         </div>
@@ -366,15 +318,15 @@ export function AdminTranslationPage() {
           待执行 {taskSummary.queued} 个 · 处理中 {taskSummary.processing} 个 · 失败 {taskSummary.failed} 个
         </div>
 
-        {isSyncing ? (
+        {queueWorkerRunning || taskSummary.processing > 0 ? (
           <div className="mt-4">
             <div className="mb-1 flex justify-between text-muted-foreground text-xs">
-              <span>串行翻译中；500 / 502 / 503 / 504 / 524 / 429 会自动重试</span>
+              <span>服务器后台串行翻译中，可以安全离开页面；临时 5xx / 429 会自动重试</span>
               <span>{progressPercent}%</span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full bg-primary transition-[width] duration-300"
+                className="h-full bg-primary transition-[width] duration-500"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
@@ -386,7 +338,7 @@ export function AdminTranslationPage() {
         <div className="mb-4">
           <h2 className="font-semibold text-lg">翻译任务队列</h2>
           <p className="mt-1 text-muted-foreground text-sm">
-            每 4 秒自动刷新。正在处理的任务会锁定同步按钮，避免重复请求。
+            每 4 秒自动刷新。队列在服务器后台执行，即使离开页面也会继续；运行期间会锁定按钮，避免重复请求。
           </p>
         </div>
 

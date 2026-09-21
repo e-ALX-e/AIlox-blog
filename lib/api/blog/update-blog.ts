@@ -11,5 +11,6 @@ export async function updateBlog(params: UpdateBlogParams) {
     url: 'admin/blog',
     method: 'PATCH',
     json: params,
+    timeout: 180_000,
   })
 }

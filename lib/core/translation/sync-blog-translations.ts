@@ -149,6 +149,21 @@ export async function syncBlogTranslation(
       },
     })
 
+  const heartbeat = setInterval(() => {
+    void db
+      .update(translationTasks)
+      .set({ updatedAt: new Date() })
+      .where(
+        and(
+          eq(translationTasks.blogId, blog.id),
+          eq(translationTasks.language, language),
+          eq(translationTasks.sourceUpdatedAt, blog.updatedAt),
+          eq(translationTasks.status, 'processing'),
+        ),
+      )
+      .catch(() => undefined)
+  }, 20_000)
+
   try {
     const translated = await translateMarkdown({
       title: blog.title,
@@ -233,6 +248,8 @@ export async function syncBlogTranslation(
       )
 
     throw error
+  } finally {
+    clearInterval(heartbeat)
   }
 }
 

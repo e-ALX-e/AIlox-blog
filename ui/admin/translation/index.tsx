@@ -7,11 +7,11 @@ import {
   getTranslationAdminState,
   syncTranslation,
   type TranslationAdminState,
+  type TranslationJob,
   updateTranslationConfig,
 } from '@/lib/api/translation/admin'
 import {
   languageDisplayName,
-  translationLanguages,
   type TranslationLanguage,
 } from '@/lib/i18n/config'
 import { Button } from '@/ui/shadcn/button'
@@ -43,18 +43,26 @@ export function AdminTranslationPage() {
   const [apiKey, setApiKey] = useState('')
   const [hasApiKey, setHasApiKey] = useState(false)
   const [usage, setUsage] = useState(emptyUsage)
-  const [publishedBlogIds, setPublishedBlogIds] = useState<number[]>([])
+  const [pendingJobs, setPendingJobs] = useState<TranslationJob[]>([])
+  const [skippedUpToDateCount, setSkippedUpToDateCount] = useState(0)
+  const [totalTranslationSlots, setTotalTranslationSlots] = useState(0)
   const [syncDone, setSyncDone] = useState(0)
   const [syncTotal, setSyncTotal] = useState(0)
 
-  const loadState = async () => {
-    const data = await getTranslationAdminState()
+  const applyState = (data: TranslationAdminState) => {
     setEnabled(data.config.enabled)
     setBaseUrl(data.config.baseUrl)
     setModel(data.config.model)
     setHasApiKey(data.config.hasApiKey)
     setUsage(data.usage)
-    setPublishedBlogIds(data.publishedBlogIds)
+    setPendingJobs(data.pendingJobs)
+    setSkippedUpToDateCount(data.skippedUpToDateCount)
+    setTotalTranslationSlots(data.totalTranslationSlots)
+  }
+
+  const loadState = async () => {
+    const data = await getTranslationAdminState()
+    applyState(data)
     return data
   }
 
@@ -64,12 +72,7 @@ export function AdminTranslationPage() {
     void getTranslationAdminState()
       .then(data => {
         if (!active) return
-        setEnabled(data.config.enabled)
-        setBaseUrl(data.config.baseUrl)
-        setModel(data.config.model)
-        setHasApiKey(data.config.hasApiKey)
-        setUsage(data.usage)
-        setPublishedBlogIds(data.publishedBlogIds)
+        applyState(data)
       })
       .catch(error => {
         sileo.error({ title: error instanceof Error ? error.message : '加载模型配置失败' })
@@ -105,12 +108,13 @@ export function AdminTranslationPage() {
   }
 
   const syncAll = async () => {
-    const jobs = publishedBlogIds.flatMap(blogId =>
-      translationLanguages.map(language => ({ blogId, language })),
-    )
+    const jobs = [...pendingJobs]
 
     if (jobs.length === 0) {
-      sileo.info({ title: '没有已发布文章需要翻译' })
+      sileo.success({
+        title: '所有翻译均为最新',
+        description: `已跳过 ${skippedUpToDateCount} 个没有变化的语言版本`,
+      })
       return
     }
 
@@ -119,15 +123,18 @@ export function AdminTranslationPage() {
     setSyncTotal(jobs.length)
 
     const failures: SyncFailure[] = []
-    let nextIndex = 0
+    let translatedCount = 0
+    let skippedDuringRun = 0
 
-    const worker = async () => {
-      while (nextIndex < jobs.length) {
-        const job = jobs[nextIndex]
-        nextIndex += 1
-
+    try {
+      // Run one model request at a time. This is deliberately conservative:
+      // it reduces provider-side 500/429 errors and works better through proxies.
+      for (const job of jobs) {
         try {
-          await syncTranslation(job)
+          const response = await syncTranslation(job)
+
+          if (response.result.translated) translatedCount += 1
+          if (response.result.skipped) skippedDuringRun += 1
         } catch (error) {
           failures.push({
             ...job,
@@ -137,12 +144,7 @@ export function AdminTranslationPage() {
           setSyncDone(value => value + 1)
         }
       }
-    }
 
-    try {
-      // Keep each HTTP request short and use only two concurrent model calls.
-      // This avoids a single Cloudflare request waiting for every article/language.
-      await Promise.all([worker(), worker()])
       const freshState = await loadState()
 
       if (failures.length > 0) {
@@ -156,12 +158,12 @@ export function AdminTranslationPage() {
 
         sileo.error({
           title: `翻译完成，但有 ${failures.length} 个任务失败`,
-          description: preview,
+          description: `成功 ${translatedCount}，跳过 ${skippedDuringRun}。仍有 ${freshState.pendingJobs.length} 个待更新。 ${preview}`,
         })
       } else {
         sileo.success({
-          title: '已重新翻译全部已发布文章',
-          description: `完成 ${jobs.length} 个翻译任务，总 Token ${freshState.usage.totalTokens.toLocaleString()}`,
+          title: '翻译同步完成',
+          description: `新翻译 ${translatedCount} 个，跳过未变更 ${freshState.skippedUpToDateCount} 个，总 Token ${freshState.usage.totalTokens.toLocaleString()}`,
         })
       }
     } finally {
@@ -255,14 +257,23 @@ export function AdminTranslationPage() {
             ) : (
               <RefreshCcw className="size-4" />
             )}
-            {isSyncing ? `翻译中 ${syncDone}/${syncTotal}` : '重新翻译全部已发布文章'}
+            {isSyncing
+              ? `翻译中 ${syncDone}/${syncTotal}`
+              : pendingJobs.length > 0
+                ? `同步待更新翻译（${pendingJobs.length}）`
+                : '翻译已是最新'}
           </Button>
+        </div>
+
+        <div className="mt-3 text-muted-foreground text-xs">
+          共 {totalTranslationSlots} 个语言版本 · 已是最新并跳过 {skippedUpToDateCount} 个 ·
+          待翻译 {pendingJobs.length} 个
         </div>
 
         {isSyncing ? (
           <div className="mt-4">
             <div className="mb-1 flex justify-between text-muted-foreground text-xs">
-              <span>分批翻译中，每个请求只处理一篇文章的一种语言</span>
+              <span>串行翻译中；500 / 502 / 503 / 504 / 524 / 429 会自动重试</span>
               <span>{progressPercent}%</span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-muted">

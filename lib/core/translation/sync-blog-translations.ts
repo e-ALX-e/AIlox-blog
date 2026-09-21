@@ -1,17 +1,25 @@
 import 'server-only'
 
 import type { TranslationLanguage } from '@/lib/i18n/config'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { db } from '@/db/instance'
-import { blogs, blogTranslations, translationUsage } from '@/db/schema'
+import {
+  blogs,
+  blogTranslations,
+  translationTasks,
+  translationUsage,
+} from '@/db/schema'
 import { translationLanguages } from '@/lib/i18n/config'
 import { getTranslationModelConfig } from '@/lib/infra/translation/config'
 import { translateMarkdown } from '@/lib/infra/translation/openai-compatible'
+
+const ACTIVE_TASK_TTL_MS = 3 * 60 * 1000
 
 export type BlogTranslationJobResult = {
   attempted: boolean
   translated: boolean
   skipped: boolean
+  inProgress: boolean
   language: TranslationLanguage
 }
 
@@ -19,6 +27,7 @@ export type BlogTranslationSyncResult = {
   attempted: boolean
   translatedLanguages: string[]
   skippedLanguages: string[]
+  inProgressLanguages: string[]
   failedLanguages: Array<{ language: string; error: string }>
 }
 
@@ -33,6 +42,7 @@ export async function syncBlogTranslation(
       attempted: false,
       translated: false,
       skipped: false,
+      inProgress: false,
       language,
     }
   }
@@ -46,6 +56,7 @@ export async function syncBlogTranslation(
       attempted: false,
       translated: false,
       skipped: false,
+      inProgress: false,
       language,
     }
   }
@@ -72,75 +83,174 @@ export async function syncBlogTranslation(
       attempted: false,
       translated: false,
       skipped: true,
+      inProgress: false,
       language,
     }
   }
 
-  const translated = await translateMarkdown({
-    title: blog.title,
-    content: blog.content,
-    targetLanguage: language,
-  })
+  const existingTask = await db
+    .select({
+      id: translationTasks.id,
+      status: translationTasks.status,
+      updatedAt: translationTasks.updatedAt,
+    })
+    .from(translationTasks)
+    .where(
+      and(
+        eq(translationTasks.blogId, blog.id),
+        eq(translationTasks.language, language),
+        eq(translationTasks.sourceUpdatedAt, blog.updatedAt),
+      ),
+    )
+    .limit(1)
+    .then(rows => rows[0])
 
-  await db.transaction(async transaction => {
-    await transaction
-      .insert(blogTranslations)
-      .values({
-        blogId: blog.id,
-        language,
-        title: translated.title.slice(0, 120),
-        content: translated.content,
-        sourceUpdatedAt: blog.updatedAt,
-        translatedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: [blogTranslations.blogId, blogTranslations.language],
-        set: {
+  if (
+    existingTask?.status === 'processing' &&
+    Date.now() - existingTask.updatedAt.getTime() < ACTIVE_TASK_TTL_MS
+  ) {
+    return {
+      attempted: false,
+      translated: false,
+      skipped: false,
+      inProgress: true,
+      language,
+    }
+  }
+
+  const now = new Date()
+
+  await db
+    .insert(translationTasks)
+    .values({
+      blogId: blog.id,
+      language,
+      sourceUpdatedAt: blog.updatedAt,
+      status: 'processing',
+      attempts: 1,
+      error: null,
+      startedAt: now,
+      finishedAt: null,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [
+        translationTasks.blogId,
+        translationTasks.language,
+        translationTasks.sourceUpdatedAt,
+      ],
+      set: {
+        status: 'processing',
+        attempts: sql`${translationTasks.attempts} + 1`,
+        error: null,
+        startedAt: now,
+        finishedAt: null,
+        updatedAt: now,
+      },
+    })
+
+  try {
+    const translated = await translateMarkdown({
+      title: blog.title,
+      content: blog.content,
+      targetLanguage: language,
+    })
+
+    const finishedAt = new Date()
+
+    await db.transaction(async transaction => {
+      await transaction
+        .insert(blogTranslations)
+        .values({
+          blogId: blog.id,
+          language,
           title: translated.title.slice(0, 120),
           content: translated.content,
           sourceUpdatedAt: blog.updatedAt,
-          translatedAt: new Date(),
-        },
+          translatedAt: finishedAt,
+        })
+        .onConflictDoUpdate({
+          target: [blogTranslations.blogId, blogTranslations.language],
+          set: {
+            title: translated.title.slice(0, 120),
+            content: translated.content,
+            sourceUpdatedAt: blog.updatedAt,
+            translatedAt: finishedAt,
+          },
+        })
+
+      await transaction.insert(translationUsage).values({
+        blogId: blog.id,
+        language,
+        model: translated.model,
+        promptTokens: translated.usage.promptTokens,
+        completionTokens: translated.usage.completionTokens,
+        totalTokens: translated.usage.totalTokens,
       })
 
-    await transaction.insert(translationUsage).values({
-      blogId: blog.id,
-      language,
-      model: translated.model,
-      promptTokens: translated.usage.promptTokens,
-      completionTokens: translated.usage.completionTokens,
-      totalTokens: translated.usage.totalTokens,
+      await transaction
+        .update(translationTasks)
+        .set({
+          status: 'succeeded',
+          error: null,
+          finishedAt,
+          updatedAt: finishedAt,
+        })
+        .where(
+          and(
+            eq(translationTasks.blogId, blog.id),
+            eq(translationTasks.language, language),
+            eq(translationTasks.sourceUpdatedAt, blog.updatedAt),
+          ),
+        )
     })
-  })
 
-  return {
-    attempted: true,
-    translated: true,
-    skipped: false,
-    language,
+    return {
+      attempted: true,
+      translated: true,
+      skipped: false,
+      inProgress: false,
+      language,
+    }
+  } catch (error) {
+    const failedAt = new Date()
+    const message = error instanceof Error ? error.message : String(error)
+
+    await db
+      .update(translationTasks)
+      .set({
+        status: 'failed',
+        error: message,
+        finishedAt: failedAt,
+        updatedAt: failedAt,
+      })
+      .where(
+        and(
+          eq(translationTasks.blogId, blog.id),
+          eq(translationTasks.language, language),
+          eq(translationTasks.sourceUpdatedAt, blog.updatedAt),
+        ),
+      )
+
+    throw error
   }
 }
 
 export async function syncBlogTranslations(blogId: number): Promise<BlogTranslationSyncResult> {
   const translatedLanguages: string[] = []
   const skippedLanguages: string[] = []
+  const inProgressLanguages: string[] = []
   const failedLanguages: Array<{ language: string; error: string }> = []
   let attempted = false
 
-  // Run languages sequentially. Some compatible providers are unstable when
-  // several long Markdown completions share one connection/account at once.
   for (const language of translationLanguages) {
     try {
       const result = await syncBlogTranslation(blogId, language)
       attempted ||= result.attempted
 
-      if (result.translated) {
-        translatedLanguages.push(language)
-      }
-
-      if (result.skipped) {
-        skippedLanguages.push(language)
-      }
+      if (result.translated) translatedLanguages.push(language)
+      if (result.skipped) skippedLanguages.push(language)
+      if (result.inProgress) inProgressLanguages.push(language)
     } catch (error) {
       attempted = true
       failedLanguages.push({
@@ -154,6 +264,7 @@ export async function syncBlogTranslations(blogId: number): Promise<BlogTranslat
     attempted,
     translatedLanguages,
     skippedLanguages,
+    inProgressLanguages,
     failedLanguages,
   }
 }

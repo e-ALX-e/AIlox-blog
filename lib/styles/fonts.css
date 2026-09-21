@@ -13,3 +13,27 @@
     monospace, -apple-system;
   --font-ye-font: var(--font-mono), var(--font-serif);
 }
+
+
+/*
+ * Victor Mono / SimSun are fine for the original Chinese developer aesthetic,
+ * but their Cyrillic metrics make normal Russian prose look artificially
+ * letter-spaced. Use a proportional serif stack for Russian UI/prose while
+ * keeping explicit code/mono blocks unchanged.
+ */
+html:lang(ru) body,
+html:lang(ru) .font-serif {
+  font-family:
+    Georgia, "Times New Roman", "Noto Serif", "Liberation Serif",
+    "DejaVu Serif", serif;
+  letter-spacing: normal;
+  font-kerning: normal;
+}
+
+html:lang(ru) .font-header {
+  font-family:
+    Georgia, "Times New Roman", "Noto Serif", "Liberation Serif",
+    "DejaVu Serif", serif;
+  letter-spacing: normal;
+  font-kerning: normal;
+}

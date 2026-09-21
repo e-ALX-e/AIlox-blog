@@ -4,6 +4,7 @@ import { Check, ExternalLink, Mail, Pencil, RefreshCcw, Trash2, X } from 'lucide
 import Image from 'next/image'
 import Link from 'next/link'
 import { prettyDateTime } from '@/lib/utils/common/time'
+import { cn } from '@/lib/utils/common/shadcn'
 import { Badge } from '@/ui/shadcn/badge'
 import { Button } from '@/ui/shadcn/button'
 import { friendLinkStateBadgeVariantMap, friendLinkStateLabelMap } from './constants'
@@ -25,11 +26,18 @@ export function FriendLinkListItem({
   onEditClick: (friendLink: AdminFriendLinkRecord) => void
   onUpdateState: (id: number, nextState: FriendLinkState) => void
 }) {
+  const isSvgAvatar = /\.svg(?:$|[?#])/i.test(friendLink.avatarUrl)
+
   return (
     <li className="rounded-sm border bg-background p-3 shadow-xs">
       <section className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 gap-3">
-          <span className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-full border bg-card">
+          <span
+            className={cn(
+              'grid size-14 shrink-0 place-items-center overflow-hidden',
+              isSvgAvatar ? 'rounded-xl bg-transparent' : 'rounded-full border bg-card',
+            )}
+          >
             <Image
               src={friendLink.avatarUrl}
               alt={friendLink.name}

@@ -362,7 +362,14 @@ export function AdminTranslationPage() {
             type="button"
             variant="outline"
             onClick={() => void startQueue()}
-            disabled={isStarting || !enabled || !hasApiKey || queuedJobs.length === 0}
+            disabled={
+              isStarting ||
+              !enabled ||
+              !hasApiKey ||
+              queueWorkerRunning ||
+              taskSummary.processing > 0 ||
+              queuedJobs.length === 0
+            }
           >
             {isStarting ? (
               <Loader2 className="size-4 animate-spin" />

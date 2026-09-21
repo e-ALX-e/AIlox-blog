@@ -1,6 +1,6 @@
-import { eq, inArray } from 'drizzle-orm'
+import { desc, eq, inArray } from 'drizzle-orm'
 import { db } from '@/db/instance'
-import { blogs, blogTranslations } from '@/db/schema'
+import { blogs, blogTranslations, translationTasks } from '@/db/schema'
 import { BadRequestError } from '@/lib/common/errors/request'
 import { noPermission } from '@/lib/core/auth/guard'
 import { syncBlogTranslation } from '@/lib/core/translation/sync-blog-translations'
@@ -14,6 +14,8 @@ import {
 } from '@/lib/infra/translation/config'
 import { syncTranslationSchema, updateTranslationConfigSchema } from './schema'
 
+const ACTIVE_TASK_TTL_MS = 3 * 60 * 1000
+
 export const GET = withResponse(async () => {
   if (await noPermission()) {
     throw new BadRequestError('Insufficient permissions.')
@@ -25,6 +27,7 @@ export const GET = withResponse(async () => {
     db
       .select({
         id: blogs.id,
+        title: blogs.title,
         updatedAt: blogs.updatedAt,
       })
       .from(blogs)
@@ -33,17 +36,36 @@ export const GET = withResponse(async () => {
   ])
 
   const blogIds = publishedBlogs.map(blog => blog.id)
-  const existingTranslations =
+  const [existingTranslations, taskRows] =
     blogIds.length === 0
-      ? []
-      : await db
-          .select({
-            blogId: blogTranslations.blogId,
-            language: blogTranslations.language,
-            sourceUpdatedAt: blogTranslations.sourceUpdatedAt,
-          })
-          .from(blogTranslations)
-          .where(inArray(blogTranslations.blogId, blogIds))
+      ? [[], []]
+      : await Promise.all([
+          db
+            .select({
+              blogId: blogTranslations.blogId,
+              language: blogTranslations.language,
+              sourceUpdatedAt: blogTranslations.sourceUpdatedAt,
+            })
+            .from(blogTranslations)
+            .where(inArray(blogTranslations.blogId, blogIds)),
+          db
+            .select({
+              id: translationTasks.id,
+              blogId: translationTasks.blogId,
+              language: translationTasks.language,
+              sourceUpdatedAt: translationTasks.sourceUpdatedAt,
+              status: translationTasks.status,
+              attempts: translationTasks.attempts,
+              error: translationTasks.error,
+              startedAt: translationTasks.startedAt,
+              finishedAt: translationTasks.finishedAt,
+              updatedAt: translationTasks.updatedAt,
+            })
+            .from(translationTasks)
+            .where(inArray(translationTasks.blogId, blogIds))
+            .orderBy(desc(translationTasks.updatedAt))
+            .limit(100),
+        ])
 
   const translationByKey = new Map(
     existingTranslations.map(translation => [
@@ -51,10 +73,25 @@ export const GET = withResponse(async () => {
       translation,
     ]),
   )
+  const blogById = new Map(publishedBlogs.map(blog => [blog.id, blog]))
+  const taskByCurrentSourceKey = new Map<string, (typeof taskRows)[number]>()
+
+  for (const task of taskRows) {
+    const blog = blogById.get(task.blogId)
+    if (blog == null) continue
+
+    if (task.sourceUpdatedAt.getTime() !== blog.updatedAt.getTime()) continue
+
+    const key = `${task.blogId}:${task.language}`
+    if (!taskByCurrentSourceKey.has(key)) {
+      taskByCurrentSourceKey.set(key, task)
+    }
+  }
 
   const pendingJobs = publishedBlogs.flatMap(blog =>
     translationLanguages.flatMap(language => {
-      const translation = translationByKey.get(`${blog.id}:${language}`)
+      const key = `${blog.id}:${language}`
+      const translation = translationByKey.get(key)
 
       if (
         translation != null &&
@@ -63,17 +100,63 @@ export const GET = withResponse(async () => {
         return []
       }
 
-      return [{ blogId: blog.id, language }]
+      const task = taskByCurrentSourceKey.get(key)
+      const processingIsStale =
+        task?.status === 'processing' &&
+        Date.now() - task.updatedAt.getTime() >= ACTIVE_TASK_TTL_MS
+      const status =
+        task == null
+          ? 'queued'
+          : processingIsStale
+            ? 'failed'
+            : task.status === 'succeeded' || task.status === 'skipped'
+              ? 'queued'
+              : task.status
+
+      return [
+        {
+          blogId: blog.id,
+          blogTitle: blog.title,
+          language,
+          status,
+          attempts: task?.attempts ?? 0,
+          error: processingIsStale
+            ? '上一次任务已中断或超时，可以重新同步。'
+            : task?.error ?? null,
+          updatedAt: task?.updatedAt ?? null,
+        },
+      ]
     }),
   )
 
   const totalTranslationSlots = publishedBlogs.length * translationLanguages.length
+  const taskSummary = {
+    queued: pendingJobs.filter(job => job.status === 'queued').length,
+    processing: pendingJobs.filter(job => job.status === 'processing').length,
+    failed: pendingJobs.filter(job => job.status === 'failed').length,
+    upToDate: totalTranslationSlots - pendingJobs.length,
+  }
+
+  const recentTasks = taskRows.slice(0, 30).map(task => ({
+    id: task.id,
+    blogId: task.blogId,
+    blogTitle: blogById.get(task.blogId)?.title ?? `#${task.blogId}`,
+    language: task.language,
+    status: task.status,
+    attempts: task.attempts,
+    error: task.error,
+    startedAt: task.startedAt,
+    finishedAt: task.finishedAt,
+    updatedAt: task.updatedAt,
+  }))
 
   return {
     config,
     usage,
     pendingJobs,
-    skippedUpToDateCount: totalTranslationSlots - pendingJobs.length,
+    taskSummary,
+    recentTasks,
+    skippedUpToDateCount: taskSummary.upToDate,
     totalTranslationSlots,
   }
 })
@@ -129,12 +212,16 @@ export const POST = withResponse(async request => {
   try {
     const result = await syncBlogTranslation(parsed.data.blogId, parsed.data.language)
 
-    if (!result.attempted && !result.translated && !result.skipped) {
+    if (!result.attempted && !result.translated && !result.skipped && !result.inProgress) {
       throw new BadRequestError('文章不存在、未发布或翻译模型未启用。')
     }
 
     return {
-      message: result.skipped ? 'Translation is already up to date.' : 'Translation completed.',
+      message: result.inProgress
+        ? 'Translation is already processing.'
+        : result.skipped
+          ? 'Translation is already up to date.'
+          : 'Translation completed.',
       result,
       usage: await getTranslationUsageStats(),
     }

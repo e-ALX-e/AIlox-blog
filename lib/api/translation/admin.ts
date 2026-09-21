@@ -29,6 +29,7 @@ export type TranslationJob = {
   blogId: number
   blogTitle: string
   language: TranslationLanguage
+  force: boolean
   status: TranslationTaskStatus
   attempts: number
   error: string | null
@@ -66,6 +67,10 @@ export type TranslationAdminState = {
     upToDate: number
   }
   recentTasks: TranslationTaskRecord[]
+  publishedBlogs: Array<{
+    id: number
+    title: string
+  }>
   queueWorkerRunning: boolean
   skippedUpToDateCount: number
   totalTranslationSlots: number
@@ -146,6 +151,25 @@ export async function controlTranslationTasks(params: {
   }>({
     url: 'admin/translation/tasks',
     method: 'PATCH',
+    json: params,
+  })
+}
+
+
+export async function retranslateBlogLanguage(params: {
+  blogId: number
+  language: TranslationLanguage
+}) {
+  return await apiRequest<{
+    message: string
+    task: {
+      id: number
+      blogId: number
+      language: TranslationLanguage
+    }
+  }>({
+    url: 'admin/translation/retranslate',
+    method: 'POST',
     json: params,
   })
 }

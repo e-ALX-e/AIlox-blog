@@ -58,7 +58,12 @@ export async function syncBlogTranslation(
 ): Promise<BlogTranslationJobResult> {
   const config = await getTranslationModelConfig()
 
-  if (!config.enabled || config.apiKey == null) {
+  if (
+    (!config.enabled && !options.force) ||
+    config.apiKey == null ||
+    config.baseUrl.trim().length === 0 ||
+    config.model.trim().length === 0
+  ) {
     return {
       attempted: false,
       translated: false,

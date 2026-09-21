@@ -45,3 +45,9 @@ export const translationTaskActionSchema = z
     action: z.enum(['pause', 'resume', 'cancel']),
     taskIds: z.array(z.coerce.number().int().positive()).min(1).max(200),
   })
+
+
+export const retranslateTranslationSchema = z.object({
+  blogId: z.coerce.number().int().positive(),
+  language: z.enum(translationLanguages),
+})

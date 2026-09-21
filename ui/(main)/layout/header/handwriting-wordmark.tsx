@@ -21,11 +21,13 @@ const RING = 'M1924.0 305.0 L1919.0 297.0 L1906.0 286.0 L1896.0 283.0 L1882.0 28
 const MASK_STROKE_WIDTH = 60
 
 const writingStrokes = [
-  { d: A_MAIN, duration: 0.58 },
-  { d: A_CROSS, duration: 0.30 },
-  { d: BODY, duration: 1.08 },
-  { d: X_CROSS, duration: 0.24 },
-  { d: FINAL_I, duration: 0.34 },
+  // The A main stroke passes very close to the cross stroke. Use a tighter
+  // reveal mask here so the cross stroke cannot peek through early.
+  { d: A_MAIN, duration: 0.58, maskStrokeWidth: 32, advance: 0.61 },
+  { d: A_CROSS, duration: 0.30, maskStrokeWidth: MASK_STROKE_WIDTH, advance: 0.22 },
+  { d: BODY, duration: 1.08, maskStrokeWidth: MASK_STROKE_WIDTH, advance: 0.78 },
+  { d: X_CROSS, duration: 0.24, maskStrokeWidth: MASK_STROKE_WIDTH, advance: 0.17 },
+  { d: FINAL_I, duration: 0.34, maskStrokeWidth: MASK_STROKE_WIDTH, advance: 0.24 },
 ] as const
 
 export function HandwritingWordmark({
@@ -45,7 +47,7 @@ export function HandwritingWordmark({
 
   const strokeTimings = writingStrokes.map(stroke => {
     const currentDelay = strokeDelay
-    strokeDelay += stroke.duration * 0.72
+    strokeDelay += stroke.advance
     return { ...stroke, delay: currentDelay }
   })
 
@@ -81,7 +83,7 @@ export function HandwritingWordmark({
               d={stroke.d}
               fill="none"
               stroke="white"
-              strokeWidth={MASK_STROKE_WIDTH}
+              strokeWidth={stroke.maskStrokeWidth}
               strokeLinecap="round"
               strokeLinejoin="round"
               initial={shouldReduceMotion ? false : { pathLength: 0, opacity: 0 }}

@@ -5,6 +5,7 @@ import { db } from '@/db/instance'
 import { blogs, blogTags, blogToBlogTag, siteComments } from '@/db/schema'
 import { BadRequestError } from '@/lib/common/errors/request'
 import { noPermission } from '@/lib/core/auth/guard'
+import { syncBlogTranslations } from '@/lib/core/translation/sync-blog-translations'
 import { languages } from '@/lib/i18n/config'
 import { readJsonBody } from '@/lib/infra/http/read-json-body'
 import { withResponse } from '@/lib/infra/http/with-response'
@@ -197,9 +198,32 @@ export const POST = withResponse(async request => {
 
   revalidateBlogPaths(created.slug)
 
+  let translation:
+    | Awaited<ReturnType<typeof syncBlogTranslations>>
+    | { attempted: true; translatedLanguages: string[]; failedLanguages: Array<{ language: string; error: string }> }
+    | undefined
+
+  if (created.isPublished) {
+    try {
+      translation = await syncBlogTranslations(created.id)
+    } catch (error) {
+      translation = {
+        attempted: true,
+        translatedLanguages: [],
+        failedLanguages: [
+          {
+            language: 'all',
+            error: error instanceof Error ? error.message : String(error),
+          },
+        ],
+      }
+    }
+  }
+
   return {
     message: 'Created.',
     data: created,
+    translation,
   }
 })
 
@@ -294,9 +318,36 @@ export const PATCH = withResponse(async request => {
 
   revalidateBlogPaths(existingBlog.slug, updated.slug)
 
+  const sourceChanged = title != null || content != null
+  const becamePublished = !existingBlog.isPublished && updated.isPublished
+  const shouldTranslate = updated.isPublished && (sourceChanged || becamePublished)
+
+  let translation:
+    | Awaited<ReturnType<typeof syncBlogTranslations>>
+    | { attempted: true; translatedLanguages: string[]; failedLanguages: Array<{ language: string; error: string }> }
+    | undefined
+
+  if (shouldTranslate) {
+    try {
+      translation = await syncBlogTranslations(updated.id)
+    } catch (error) {
+      translation = {
+        attempted: true,
+        translatedLanguages: [],
+        failedLanguages: [
+          {
+            language: 'all',
+            error: error instanceof Error ? error.message : String(error),
+          },
+        ],
+      }
+    }
+  }
+
   return {
     message: 'Updated.',
     data: updated,
+    translation,
   }
 })
 

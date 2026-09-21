@@ -19,7 +19,7 @@ const socialLinks = [
   // },
   {
     name: 'Gmail',
-    url: '3612996124@qq.com',
+    url: 'mailto:3612996124@qq.com',
     Icon: GmailIcon,
   },
 ]
@@ -58,19 +58,23 @@ export default function HomeFooter() {
         className="flex justify-end gap-6"
         variants={socialLinksVariants}
       >
-        {socialLinks.map(({ Icon, name, url }) => (
-          <motion.a
-            aria-label={name}
-            className="size-5 text-zinc-700 transition-colors hover:text-black focus-visible:outline-2 focus-visible:outline-black focus-visible:outline-offset-4 dark:text-zinc-300 dark:focus-visible:outline-white dark:hover:text-white"
-            href={url}
-            key={url}
-            target="_blank"
-            rel="noreferrer"
-            variants={socialLinkVariants}
-          >
-            <Icon aria-hidden="true" className="size-full" />
-          </motion.a>
-        ))}
+        {socialLinks.map(({ Icon, name, url }) => {
+          const isExternalHttpLink = /^https?:\/\//.test(url)
+
+          return (
+            <motion.a
+              aria-label={name}
+              className="size-5 text-zinc-700 transition-colors hover:text-black focus-visible:outline-2 focus-visible:outline-black focus-visible:outline-offset-4 dark:text-zinc-300 dark:focus-visible:outline-white dark:hover:text-white"
+              href={url}
+              key={url}
+              target={isExternalHttpLink ? '_blank' : undefined}
+              rel={isExternalHttpLink ? 'noreferrer' : undefined}
+              variants={socialLinkVariants}
+            >
+              <Icon aria-hidden="true" className="size-full" />
+            </motion.a>
+          )
+        })}
       </motion.nav>
     </footer>
   )

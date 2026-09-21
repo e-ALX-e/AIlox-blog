@@ -17,8 +17,12 @@ export const POST = withResponse(async request => {
 
   const config = await getPublicTranslationModelConfig()
 
-  if (!config.enabled || !config.hasApiKey) {
-    throw new BadRequestError('请先配置并启用翻译模型。')
+  if (
+    !config.hasApiKey ||
+    config.baseUrl.trim().length === 0 ||
+    config.model.trim().length === 0
+  ) {
+    throw new BadRequestError('请先完整配置翻译模型、API Base URL 和 API Key。')
   }
 
   const body = await readJsonBody(request)

@@ -30,23 +30,44 @@ export const POST = withResponse(async request => {
     })
   }
 
-  try {
-    const task = await enqueueForcedTranslationTask(
-      parsed.data.blogId,
-      parsed.data.language,
-    )
+  const tasks: Array<{
+    id: number
+    blogId: number
+    language: string
+  }> = []
+  const failures: Array<{
+    blogId: number
+    language: string
+    error: string
+  }> = []
 
+  for (const blogId of [...new Set(parsed.data.blogIds)]) {
+    for (const language of [...new Set(parsed.data.languages)]) {
+      try {
+        const task = await enqueueForcedTranslationTask(blogId, language)
+        tasks.push(task)
+      } catch (error) {
+        failures.push({
+          blogId,
+          language,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+  }
+
+  if (tasks.length > 0) {
     after(async () => {
       await startTranslationQueueWorker()
     })
+  }
 
-    return {
-      message: 'Retranslation queued.',
-      task,
-    }
-  } catch (error) {
-    throw new BadRequestError(
-      error instanceof Error ? error.message : '无法创建重新翻译任务。',
-    )
+  return {
+    message:
+      failures.length === 0
+        ? 'Retranslation jobs queued.'
+        : 'Retranslation jobs queued with some failures.',
+    tasks,
+    failures,
   }
 })

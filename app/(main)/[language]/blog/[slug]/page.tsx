@@ -20,7 +20,7 @@ export async function generateMetadata({
   const language = getRouteLanguage(languageParam)
   const blog = await db.query.blogs.findFirst({
     where: and(eq(blogs.slug, slug), eq(blogs.isPublished, true)),
-    columns: { id: true, title: true },
+    columns: { id: true, title: true, updatedAt: true },
   })
 
   if (blog == null) {
@@ -31,7 +31,7 @@ export async function generateMetadata({
     language === 'zh'
       ? null
       : await db
-          .select({ title: blogTranslations.title })
+          .select({ title: blogTranslations.title, sourceUpdatedAt: blogTranslations.sourceUpdatedAt })
           .from(blogTranslations)
           .where(
             and(
@@ -40,7 +40,14 @@ export async function generateMetadata({
             ),
           )
           .limit(1)
-          .then(rows => rows[0]?.title ?? null)
+          .then(rows => {
+            const translation = rows[0]
+            if (translation == null) return null
+
+            return new Date(translation.sourceUpdatedAt).getTime() >= new Date(blog.updatedAt).getTime()
+              ? translation.title
+              : null
+          })
 
   const title = translatedTitle ?? blog.title
 

@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, primaryKey, serial, text, varchar } from 'drizzle-orm/pg-core'
+import { boolean, integer, pgTable, primaryKey, serial, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core'
 import { dateTime } from '../columns'
 import { blogs } from './blog'
 
@@ -45,3 +45,30 @@ export const translationUsage = pgTable('TranslationUsage', {
   totalTokens: integer('totalTokens').default(0).notNull(),
   createdAt: dateTime('createdAt').defaultNow().notNull(),
 })
+
+
+export const translationTasks = pgTable(
+  'TranslationTask',
+  {
+    id: serial('id').primaryKey(),
+    blogId: integer('blogId')
+      .notNull()
+      .references(() => blogs.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+    language: varchar('language', { length: 16 }).notNull(),
+    sourceUpdatedAt: dateTime('sourceUpdatedAt').notNull(),
+    status: varchar('status', { length: 16 }).default('queued').notNull(),
+    attempts: integer('attempts').default(0).notNull(),
+    error: text('error'),
+    startedAt: dateTime('startedAt'),
+    finishedAt: dateTime('finishedAt'),
+    createdAt: dateTime('createdAt').defaultNow().notNull(),
+    updatedAt: dateTime('updatedAt').defaultNow().notNull(),
+  },
+  table => [
+    uniqueIndex('TranslationTask_blog_language_source_key').on(
+      table.blogId,
+      table.language,
+      table.sourceUpdatedAt,
+    ),
+  ],
+)

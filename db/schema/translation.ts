@@ -57,6 +57,7 @@ export const translationTasks = pgTable(
     language: varchar('language', { length: 16 }).notNull(),
     sourceUpdatedAt: dateTime('sourceUpdatedAt').notNull(),
     status: varchar('status', { length: 16 }).default('queued').notNull(),
+    force: boolean('force').default(false).notNull(),
     attempts: integer('attempts').default(0).notNull(),
     error: text('error'),
     startedAt: dateTime('startedAt'),

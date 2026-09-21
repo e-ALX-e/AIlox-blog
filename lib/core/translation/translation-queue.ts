@@ -277,7 +277,7 @@ export async function enqueueForcedTranslationTask(
   return task
 }
 
-async function claimNextQueuedTask() {
+async function claimNextQueuedTask(forcedOnly = false) {
   while (true) {
     const task = await db
       .select({
@@ -287,7 +287,14 @@ async function claimNextQueuedTask() {
         force: translationTasks.force,
       })
       .from(translationTasks)
-      .where(eq(translationTasks.status, 'queued'))
+      .where(
+        forcedOnly
+          ? and(
+              eq(translationTasks.status, 'queued'),
+              eq(translationTasks.force, true),
+            )
+          : eq(translationTasks.status, 'queued'),
+      )
       .orderBy(asc(translationTasks.createdAt), asc(translationTasks.id))
       .limit(1)
       .then(rows => rows[0] ?? null)
@@ -325,12 +332,18 @@ async function claimNextQueuedTask() {
 async function processQueue() {
   const config = await getTranslationModelConfig()
 
-  if (!config.enabled || config.apiKey == null) {
+  if (
+    config.apiKey == null ||
+    config.baseUrl.trim().length === 0 ||
+    config.model.trim().length === 0
+  ) {
     return
   }
 
   while (true) {
-    const task = await claimNextQueuedTask()
+    // When automatic translation is disabled, only explicitly forced
+    // retranslation jobs are allowed to run.
+    const task = await claimNextQueuedTask(!config.enabled)
 
     if (task == null) return
 

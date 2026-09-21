@@ -194,6 +194,19 @@ export async function syncBlogTranslation(
     throw new Error('Translation task id is missing.')
   }
 
+  const claimedStatus = await getTaskStatus(taskId)
+
+  if (claimedStatus != null && CONTROLLED_STATUSES.has(claimedStatus)) {
+    return {
+      attempted: false,
+      translated: false,
+      skipped: false,
+      inProgress: false,
+      controlled: true,
+      language,
+    }
+  }
+
   const heartbeat = setInterval(() => {
     void db
       .update(translationTasks)

@@ -17,7 +17,25 @@ export type TranslationUsageStats = {
 
 export type TranslationJob = {
   blogId: number
+  blogTitle: string
   language: TranslationLanguage
+  status: 'queued' | 'processing' | 'failed'
+  attempts: number
+  error: string | null
+  updatedAt: Date | string | null
+}
+
+export type TranslationTaskRecord = {
+  id: number
+  blogId: number
+  blogTitle: string
+  language: TranslationLanguage
+  status: string
+  attempts: number
+  error: string | null
+  startedAt: Date | string | null
+  finishedAt: Date | string | null
+  updatedAt: Date | string
 }
 
 export type TranslationAdminState = {
@@ -29,6 +47,13 @@ export type TranslationAdminState = {
   }
   usage: TranslationUsageStats
   pendingJobs: TranslationJob[]
+  taskSummary: {
+    queued: number
+    processing: number
+    failed: number
+    upToDate: number
+  }
+  recentTasks: TranslationTaskRecord[]
   skippedUpToDateCount: number
   totalTranslationSlots: number
 }
@@ -56,13 +81,17 @@ export async function updateTranslationConfig(params: {
   })
 }
 
-export async function syncTranslation(params: TranslationJob) {
+export async function syncTranslation(params: {
+  blogId: number
+  language: TranslationLanguage
+}) {
   return await apiRequest<{
     message: string
     result: {
       attempted: boolean
       translated: boolean
       skipped: boolean
+      inProgress: boolean
       language: TranslationLanguage
     }
     usage: TranslationUsageStats

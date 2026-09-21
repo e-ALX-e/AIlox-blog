@@ -66,10 +66,37 @@ export const POST = withResponse(async () => {
   }
 
   const results = await syncAllPublishedBlogTranslations()
+  const failures = results.flatMap(({ blogId, result }) =>
+    result.failedLanguages.map(failure => ({
+      blogId,
+      language: failure.language,
+      error: failure.error,
+    })),
+  )
+  const translatedCount = results.reduce(
+    (total, item) => total + item.result.translatedLanguages.length,
+    0,
+  )
+
+  if (failures.length > 0) {
+    console.error(
+      '[translation] sync completed with failures:',
+      failures.map(item => ({
+        blogId: item.blogId,
+        language: item.language,
+        error: item.error,
+      })),
+    )
+  }
 
   return {
-    message: 'Translation sync completed.',
+    message:
+      failures.length === 0
+        ? 'Translation sync completed.'
+        : `Translation sync completed with ${failures.length} failure(s).`,
     results,
+    failures,
+    translatedCount,
     usage: await getTranslationUsageStats(),
   }
 })

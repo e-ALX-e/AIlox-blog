@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { and, asc, eq, inArray, sql } from 'drizzle-orm'
+import { asc, eq, inArray } from 'drizzle-orm'
 import { db } from '@/db/instance'
 import {
   blogs,
@@ -10,7 +10,7 @@ import {
 import { translationLanguages } from '@/lib/i18n/config'
 import { syncBlogTranslation } from './sync-blog-translations'
 
-const ACTIVE_TASK_TTL_MS = 5 * 60 * 1000
+const ACTIVE_TASK_TTL_MS = 3 * 60 * 1000
 
 type QueueWorkerState = {
   promise: Promise<void> | null

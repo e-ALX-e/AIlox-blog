@@ -270,6 +270,10 @@ export async function enqueueForcedTranslationTask(
       language: translationTasks.language,
     })
 
+  if (task == null) {
+    throw new Error('无法创建重新翻译任务。')
+  }
+
   return task
 }
 

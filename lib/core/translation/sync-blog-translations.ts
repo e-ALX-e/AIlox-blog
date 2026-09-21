@@ -243,7 +243,27 @@ export async function syncBlogTranslation(
 
     const finishedAt = new Date()
 
-    await db.transaction(async transaction => {
+    const saved = await db.transaction(async transaction => {
+      const [completedTask] = await transaction
+        .update(translationTasks)
+        .set({
+          status: 'succeeded',
+          error: null,
+          finishedAt,
+          updatedAt: finishedAt,
+        })
+        .where(
+          and(
+            eq(translationTasks.id, taskId),
+            eq(translationTasks.status, 'processing'),
+          ),
+        )
+        .returning({ id: translationTasks.id })
+
+      if (completedTask == null) {
+        return false
+      }
+
       await transaction
         .insert(blogTranslations)
         .values({
@@ -273,23 +293,15 @@ export async function syncBlogTranslation(
         totalTokens: translated.usage.totalTokens,
       })
 
-      await transaction
-        .update(translationTasks)
-        .set({
-          status: 'succeeded',
-          error: null,
-          finishedAt,
-          updatedAt: finishedAt,
-        })
-        .where(eq(translationTasks.id, taskId))
+      return true
     })
 
     return {
       attempted: true,
-      translated: true,
+      translated: saved,
       skipped: false,
       inProgress: false,
-      controlled: false,
+      controlled: !saved,
       language,
     }
   } catch (error) {

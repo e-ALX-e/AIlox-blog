@@ -450,12 +450,11 @@ export async function translateMarkdown(input: {
   const config = await getTranslationModelConfig()
 
   if (
-    !config.enabled ||
     config.apiKey == null ||
     config.baseUrl.trim().length === 0 ||
     config.model.trim().length === 0
   ) {
-    throw new Error('AI translation model is not configured or enabled.')
+    throw new Error('AI translation model is not fully configured.')
   }
 
   throwIfAborted(input.signal)

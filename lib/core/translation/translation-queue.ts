@@ -250,6 +250,35 @@ async function processQueue() {
     const controller = new AbortController()
     queueState.controllers.set(task.id, controller)
 
+    // Do not rely only on the in-memory AbortController map. In production,
+    // the admin control request and the queue worker can be handled by
+    // different Next.js route runtimes. Poll the persisted task state so a
+    // pause/cancel written to PostgreSQL reliably interrupts the active fetch.
+    const controlWatcher = setInterval(() => {
+      void db
+        .select({ status: translationTasks.status })
+        .from(translationTasks)
+        .where(eq(translationTasks.id, task.id))
+        .limit(1)
+        .then(rows => {
+          const status = rows[0]?.status
+
+          if (
+            (status === 'paused' || status === 'canceled') &&
+            !controller.signal.aborted
+          ) {
+            controller.abort(
+              new Error(
+                status === 'paused'
+                  ? 'Translation task paused by administrator.'
+                  : 'Translation task canceled by administrator.',
+              ),
+            )
+          }
+        })
+        .catch(() => undefined)
+    }, 1000)
+
     try {
       await syncBlogTranslation(
         task.blogId,
@@ -261,13 +290,16 @@ async function processQueue() {
         },
       )
     } catch (error) {
-      console.error('[translation] queued task failed', {
-        taskId: task.id,
-        blogId: task.blogId,
-        language: task.language,
-        error: error instanceof Error ? error.message : String(error),
-      })
+      if (!controller.signal.aborted) {
+        console.error('[translation] queued task failed', {
+          taskId: task.id,
+          blogId: task.blogId,
+          language: task.language,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
     } finally {
+      clearInterval(controlWatcher)
       queueState.controllers.delete(task.id)
     }
   }

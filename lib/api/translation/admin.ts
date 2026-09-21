@@ -15,11 +15,21 @@ export type TranslationUsageStats = {
   }>
 }
 
+export type TranslationTaskStatus =
+  | 'queued'
+  | 'processing'
+  | 'paused'
+  | 'failed'
+  | 'canceled'
+  | 'succeeded'
+  | 'skipped'
+
 export type TranslationJob = {
+  taskId: number
   blogId: number
   blogTitle: string
   language: TranslationLanguage
-  status: 'queued' | 'processing' | 'failed'
+  status: TranslationTaskStatus
   attempts: number
   error: string | null
   updatedAt: Date | string | null
@@ -50,7 +60,9 @@ export type TranslationAdminState = {
   taskSummary: {
     queued: number
     processing: number
+    paused: number
     failed: number
+    canceled: number
     upToDate: number
   }
   recentTasks: TranslationTaskRecord[]
@@ -93,6 +105,7 @@ export async function syncTranslation(params: {
       translated: boolean
       skipped: boolean
       inProgress: boolean
+      controlled: boolean
       language: TranslationLanguage
     }
     usage: TranslationUsageStats
@@ -104,18 +117,35 @@ export async function syncTranslation(params: {
   })
 }
 
-
 export async function runTranslationQueue() {
   return await apiRequest<{
     message: string
     queue: {
       queued: number
       alreadyProcessing: number
+      paused: number
+      canceled: number
+      failed: number
       upToDate: number
       total: number
     }
   }>({
     url: 'admin/translation/run',
     method: 'POST',
+  })
+}
+
+export async function controlTranslationTasks(params: {
+  action: 'pause' | 'resume' | 'cancel'
+  taskIds: number[]
+}) {
+  return await apiRequest<{
+    message: string
+    action: 'pause' | 'resume' | 'cancel'
+    changedTaskIds: number[]
+  }>({
+    url: 'admin/translation/tasks',
+    method: 'PATCH',
+    json: params,
   })
 }

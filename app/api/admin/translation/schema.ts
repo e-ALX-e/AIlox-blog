@@ -38,3 +38,10 @@ export const syncTranslationSchema = z.object({
   blogId: z.coerce.number().int().positive(),
   language: z.enum(translationLanguages),
 })
+
+
+export const translationTaskActionSchema = z
+  .object({
+    action: z.enum(['pause', 'resume', 'cancel']),
+    taskIds: z.array(z.coerce.number().int().positive()).min(1).max(200),
+  })

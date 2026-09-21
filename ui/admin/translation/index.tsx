@@ -1,6 +1,6 @@
 'use client'
 
-import { Loader2, RefreshCcw, Save } from 'lucide-react'
+import { Eye, EyeOff, Loader2, RefreshCcw, Save } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { sileo } from 'sileo'
 import {
@@ -76,6 +76,7 @@ export function AdminTranslationPage() {
   const [isSyncing, setIsSyncing] = useState(false)
   const [enabled, setEnabled] = useState(false)
   const [baseUrl, setBaseUrl] = useState('')
+  const [showBaseUrl, setShowBaseUrl] = useState(false)
   const [model, setModel] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [hasApiKey, setHasApiKey] = useState(false)
@@ -276,12 +277,29 @@ export function AdminTranslationPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
             <Label htmlFor="translation-base-url">API Base URL</Label>
-            <Input
-              id="translation-base-url"
-              value={baseUrl}
-              onChange={event => setBaseUrl(event.target.value)}
-              placeholder="https://api.deepseek.com/v1"
-            />
+            <div className="relative">
+              <Input
+                id="translation-base-url"
+                type={showBaseUrl ? 'text' : 'password'}
+                value={baseUrl}
+                onChange={event => setBaseUrl(event.target.value)}
+                placeholder="https://api.deepseek.com/v1"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                aria-label={showBaseUrl ? '隐藏 API Base URL' : '显示 API Base URL'}
+                aria-pressed={showBaseUrl}
+                onClick={() => setShowBaseUrl(value => !value)}
+                className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {showBaseUrl ? (
+                  <EyeOff aria-hidden="true" className="size-4" />
+                ) : (
+                  <Eye aria-hidden="true" className="size-4" />
+                )}
+              </button>
+            </div>
             <p className="text-muted-foreground text-xs">
               例如 DeepSeek、OpenAI、OpenRouter、硅基流动等兼容 Chat Completions 的地址。
             </p>

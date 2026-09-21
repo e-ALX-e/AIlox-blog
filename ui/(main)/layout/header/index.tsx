@@ -115,18 +115,20 @@ export default function Header() {
     >
       <div className="grid h-full grid-cols-[5rem_1fr] items-center sm:grid-cols-[7rem_1fr]">
         <WaveLink
-          href={languagePathPrefix}
-          withWaveUnderline={false}
-          className="flex h-full shrink-0 items-center whitespace-nowrap pl-4 leading-none sm:pl-5"
-          aria-label={translations.header.homeLabel}
-          onClick={() => setWordmarkAnimationKey(animationKey => animationKey + 1)}
-        >
-          <HandwritingWordmark
-            key={wordmarkAnimationKey}
-            delay={wordmarkAnimationKey === 0 ? headerEntranceDelay : 0}
-            isVisible={!isWaitingForHomeLoading}
-          />
-        </WaveLink>
+        href={languagePathPrefix}
+        withWaveUnderline={false}
+        className="flex h-full shrink-0 items-center whitespace-nowrap pl-4 leading-none sm:pl-5"
+        aria-label={translations.header.homeLabel}
+        onClick={() =>
+          setWordmarkAnimationKey(animationKey => animationKey + 1)
+        }
+      >
+        <HandwritingWordmark
+          key={wordmarkAnimationKey}
+          delay={wordmarkAnimationKey === 0 ? headerEntranceDelay : 0}
+          isVisible={!isWaitingForHomeLoading}
+        />
+      </WaveLink>
 
         <nav
           aria-label={translations.header.navigationLabel}

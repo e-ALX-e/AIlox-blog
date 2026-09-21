@@ -7,19 +7,19 @@ import { GitHubIcon, GmailIcon, XIcon } from './assets/social-icons'
 import { HomeTextMotion } from './home-motion'
 
 const socialLinks = [
-  {
-    name: 'GitHub',
-    url: 'https://github.com/yeyuqwer',
-    Icon: GitHubIcon,
-  },
-  {
-    name: 'X',
-    url: 'https://x.com/yeyuTvT',
-    Icon: XIcon,
-  },
+  // {
+  //   name: 'GitHub',
+  //   url: 'https://github.com/yeyuqwer',
+  //   Icon: GitHubIcon,
+  // },
+  // {
+  //   name: 'X',
+  //   url: 'https://x.com/yeyuTvT',
+  //   Icon: XIcon,
+  // },
   {
     name: 'Gmail',
-    url: 'mailto:yeyuqwer@gmail.com',
+    url: '3612996124@qq.com',
     Icon: GmailIcon,
   },
 ]

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { CommentAuthorLike } from './type'
 import Image from 'next/image'
-import avatar from '@/config/img/avatar.webp'
+import avatar from '@/config/img/Ailoxi.png'
 import { GitHubIcon } from '@/ui/components/modal/main/login-modal/assets/github-icon'
 import { GoogleIcon } from '@/ui/components/modal/main/login-modal/assets/google-icon'
 import { useTranslations } from '@/ui/components/provider/main/language-provider'

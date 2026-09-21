@@ -3,6 +3,9 @@ import { seoMetadata } from '@/config/seo'
 import { languages } from '@/lib/i18n/config'
 import { getRouteLanguage } from '@/lib/i18n/get-route-language'
 
+export const dynamic = 'force-dynamic'
+
+
 export const dynamicParams = false
 
 export function generateStaticParams() {

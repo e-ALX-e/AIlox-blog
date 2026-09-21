@@ -41,6 +41,7 @@ export const messages = {
         night: '夜晚',
       },
     },
+
     header: {
       homeLabel: '返回首页',
       navigationLabel: '主导航',
@@ -52,41 +53,56 @@ export const messages = {
         language: 'EN',
       },
     },
-    home: {
-      avatarAlt: '叶鱼的头像',
-      greeting: '你好! 我是 叶鱼 ( ^¯꒳¯^ )ﾉﾉ',
-      role: 'TypeScript 全栈开发者 ⸜( *ˊᵕˋ* )⸝',
-      about: [
-        {
-          id: 'career',
-          paragraphs: [
-            '26 年大学毕业，工作至今，主业是前端工程师',
-            '现在工作中会更喜欢写后端接口捏 φ(-ω-*)',
-          ],
-        },
-        {
-          id: 'design',
-          paragraphs: [
-            '业余时间会尝试使用 Figma 来自己设计页面 φ(´･ω･｀)',
-            '未来希望能成为一名设计工程师，做出让人觉得好看的设计 ( ˙◞˙ )',
-          ],
-        },
-        {
-          id: 'investing',
-          paragraphs: [
-            '目前在努力打工加仓 A 股',
-            '我相信 A 股会让我早几年退休，而不是晚几年 (ㅅ´˘`)',
-          ],
-        },
-      ],
-      techStackLabel: '技术栈',
-      socialLinksLabel: '社交链接',
-      copyrightName: '叶鱼',
-    },
+  home: {
+    avatarAlt: '黯留星的头像',
+
+    greeting: '你好! 我是 黯留星 ( ^¯꒳¯^ )ﾉﾉ',
+
+    role: 'Golang 全栈开发者 ⸜( *ˊᵕˋ* )⸝',
+
+    about: [
+      {
+        id: 'career',
+        paragraphs: [
+          '27 年大学毕业，主要方向是 Go 后端开发、自动化与云端服务',
+          '平时喜欢用 Python 和 AI 把重复的事情做成工具 φ(-ω-*)',
+        ],
+      },
+
+      {
+        id: 'engineering',
+        paragraphs: [
+          '日常会折腾 Linux、Docker、CI/CD 和各种自托管服务',
+          '比起只把代码写完，我更喜欢把部署、运行和维护一起做好 ( ˙◞˙ )',
+        ],
+      },
+
+      {
+        id: 'creative',
+        paragraphs: [
+          '偶尔也会用 Blender 做一些 3D 和视觉相关的东西',
+          '喜欢在代码、系统和创作工具之间来回折腾。',
+        ],
+      },
+
+      {
+        id: 'motto',
+        paragraphs: [
+          '灰色没有尽头，星光暂不退场。',
+        ],
+      },
+    ],
+
+    techStackLabel: '技术栈',
+    socialLinksLabel: '社交链接',
+    copyrightName: '黯留星',
+  },
+
     friends: {
       apply: '申请友链',
       visitSite: (name: string) => `访问 ${name} 的网站`,
     },
+
     comments: {
       title: '评论',
       count: (total: number) => `共 ${total} 条评论`,
@@ -96,68 +112,88 @@ export const messages = {
       placeholder: '（*＾-＾*）',
       publish: '发布',
       walletReview: 'Web3 钱包登录用户评论提交后可能需要审核。',
+
       sortOrder: {
         asc: '按时间正序',
         desc: '按时间倒序',
       },
+
       switchSortOrder: {
         asc: '切换为正序',
         desc: '切换为倒序',
       },
+
       empty: '评论会在这里按时间展开，回复会以缩进形式挂在对应楼层下面。',
       admin: '管理员',
       you: '你',
       deletedStatus: '（已删除）',
       deleted: '已删除',
+
       replyTo: (name: string) => `回复 ${name}`,
       deleteLabel: (name: string) => `删除 ${name} 的评论`,
       replyLabel: (name: string) => `回复 ${name}`,
       reply: '回复',
       replyPlaceholder: (name: string) => `回复 ${name}...`,
+
       walletReplyReview: 'Web3 钱包登录用户回复提交后可能需要审核。',
       loginToReply: '登录后即可回复这条评论。',
+
       deleteTitle: '确定要删除这条评论吗？',
       deleteDescription: '该操作不可撤销。',
+
       adminAvatarAlt: '管理员头像',
       sessionAvatarAlt: '我的头像',
-      openGithubProfile: (name: string) => `打开 ${name} 的 GitHub 主页`,
+
+      openGithubProfile: (name: string) =>
+        `打开 ${name} 的 GitHub 主页`,
     },
+
     friendLinkApplyModal: {
       title: '申请友链',
+
       description: [
         '申请说明：技术博客或生活记录，需 HTTPS、无广告 ~',
         '已添加本站 / 站点可访问 / 内容合规 ~',
       ],
+
       copied: '已复制',
       copySiteInfo: '复制本站信息',
       cancel: '取消',
       submitting: '稍等',
       submit: '提交',
+
       submitted: '友链申请已提交，等待审核。',
+
       closeLabel: '关闭友链申请弹窗',
+
       fields: {
         name: {
           label: '站点名称',
-          placeholder: '叶鱼 & 业余',
+          placeholder: '黯留星',
         },
+
         email: {
           label: '联系邮箱（可选，仅用于通知）',
-          placeholder: 'yeyuqwer@gmail.com',
+          placeholder: 'your@email.com',
         },
+
         description: {
           label: '站点描述',
-          placeholder: '业余全栈开发',
+          placeholder: 'Golang / 全栈开发 / 个人博客',
         },
+
         avatarUrl: {
           label: '头像地址',
-          placeholder: 'https://avatars.githubusercontent.com/u/140394258',
+          placeholder: 'https://example.com/avatar.webp',
         },
+
         siteUrl: {
           label: '站点地址',
-          placeholder: 'https://www.useyeyu.cc/',
+          placeholder: 'https://www.mikuflare.com/',
         },
       },
     },
+
     loginModal: {
       userInfoTitle: '用户信息',
       loginTitle: '登录 (ゝ∀･)',
@@ -168,9 +204,12 @@ export const messages = {
       adminDashboard: '进入后台',
       logout: '退出登录',
       walletAddress: '钱包地址',
-      walletSignInStatement: '使用以太坊钱包登录 www.useyeyu.cc',
+
+      walletSignInStatement:
+        '使用以太坊钱包登录 www.mikuflare.com',
     },
   },
+
   en: {
     common: {
       empty: 'Nothing here.',
@@ -201,6 +240,7 @@ export const messages = {
       pauseCloudMotion: 'Pause cloud motion',
       resetSkyBackground: 'Reset sky background',
       phase: 'Phase',
+
       skyPhases: {
         midnight: 'Midnight',
         dawn: 'Dawn',
@@ -211,134 +251,243 @@ export const messages = {
         night: 'Night',
       },
     },
+
     header: {
       homeLabel: 'Back to home',
       navigationLabel: 'Main navigation',
       switchLanguageLabel: 'Switch to Chinese',
+
       routes: {
         blog: 'Blog',
         friends: 'Friends',
         login: 'Login',
         language: 'ZH',
       },
-    },
+        },
     home: {
-      avatarAlt: "Yuuri's avatar",
-      greeting: "Hello! I'm Yuuri ( ^¯꒳¯^ )ﾉﾉ",
-      role: 'TypeScript full-stack developer ⸜( *ˊᵕˋ* )⸝',
+      avatarAlt: "Ailoxi's avatar",
+
+      greeting: "Hello! I'm Ailoxi ( ^¯꒳¯^ )ﾉﾉ",
+
+      role: 'Go / Cloud full-stack developer ⸜( *ˊᵕˋ* )⸝',
+
       about: [
         {
           id: 'career',
           paragraphs: [
-            'I graduated in 2026 and have been working as a frontend engineer ever since.',
-            'These days, I enjoy writing backend APIs even more φ(-ω-*)',
+            'I will graduate in 2027, focusing on Go backend development, automation, and cloud services.',
+            'I enjoy using Python and AI to turn repetitive tasks into useful tools φ(-ω-*)',
           ],
         },
+
         {
-          id: 'design',
+          id: 'engineering',
           paragraphs: [
-            'In my spare time, I use Figma to design interfaces of my own φ(´･ω･｀)',
-            'I hope to become a design engineer and create designs people find beautiful ( ˙◞˙ )',
+            'I spend a lot of time working with Linux, Docker, CI/CD, and self-hosted services.',
+            'I enjoy not only writing code, but also making sure it can be deployed, operated, and maintained well ( ˙◞˙ )',
           ],
         },
+
         {
-          id: 'investing',
+          id: 'creative',
           paragraphs: [
-            'Right now, I am working hard and adding to my A-share positions.',
-            'I believe A-shares will let me retire a few years earlier, not later (ㅅ´˘`)',
+            'I also use Blender from time to time for 3D and visual experiments.',
+            'I like moving between code, systems, and creative tools.',
+          ],
+        },
+
+        {
+          id: 'motto',
+          paragraphs: [
+            'Gray has no end, and the starlight has not left the stage yet.',
           ],
         },
       ],
+
       techStackLabel: 'Tech stack',
       socialLinksLabel: 'Social links',
-      copyrightName: 'Yuuri',
+      copyrightName: 'Ailoxi',
     },
+
     friends: {
       apply: 'Apply for a friend link',
-      visitSite: (name: string) => `Visit ${name}'s website`,
+      visitSite: (name: string) =>
+        `Visit ${name}'s website`,
     },
+
     comments: {
       title: 'Comments',
-      count: (total: number) => `${total} ${total === 1 ? 'comment' : 'comments'}`,
-      noComments: 'No comments yet. Be the first to comment.',
-      loginPrompt: 'Log in to leave a comment.',
-      loginToComment: 'Log in to comment',
-      placeholder: '（*＾-＾*）',
-      publish: 'Publish',
-      walletReview: 'Comments from Web3 wallet users may require review.',
+
+      count: (total: number) =>
+        `${total} ${total === 1 ? 'comment' : 'comments'}`,
+
+      noComments:
+        'No comments yet. Be the first to comment.',
+
+      loginPrompt:
+        'Log in to leave a comment.',
+
+      loginToComment:
+        'Log in to comment',
+
+      placeholder:
+        '（*＾-＾*）',
+
+      publish:
+        'Publish',
+
+      walletReview:
+        'Comments from Web3 wallet users may require review.',
+
       sortOrder: {
         asc: 'Oldest first',
         desc: 'Newest first',
       },
+
       switchSortOrder: {
         asc: 'Switch to oldest first',
         desc: 'Switch to newest first',
       },
-      empty: 'Comments will appear here by time, with replies nested under each thread.',
-      admin: 'Admin',
-      you: 'You',
-      deletedStatus: '(deleted)',
-      deleted: 'Deleted',
-      replyTo: (name: string) => `Replying to ${name}`,
-      deleteLabel: (name: string) => `Delete ${name}'s comment`,
-      replyLabel: (name: string) => `Reply to ${name}`,
-      reply: 'Reply',
-      replyPlaceholder: (name: string) => `Reply to ${name}...`,
-      walletReplyReview: 'Replies from Web3 wallet users may require review.',
-      loginToReply: 'Log in to reply to this comment.',
-      deleteTitle: 'Delete this comment?',
-      deleteDescription: 'This action cannot be undone.',
-      adminAvatarAlt: 'Admin avatar',
-      sessionAvatarAlt: 'My avatar',
-      openGithubProfile: (name: string) => `Open ${name}'s GitHub profile`,
+
+      empty:
+        'Comments will appear here by time, with replies nested under each thread.',
+
+      admin:
+        'Admin',
+
+      you:
+        'You',
+
+      deletedStatus:
+        '(deleted)',
+
+      deleted:
+        'Deleted',
+
+      replyTo: (name: string) =>
+        `Replying to ${name}`,
+
+      deleteLabel: (name: string) =>
+        `Delete ${name}'s comment`,
+
+      replyLabel: (name: string) =>
+        `Reply to ${name}`,
+
+      reply:
+        'Reply',
+
+      replyPlaceholder: (name: string) =>
+        `Reply to ${name}...`,
+
+      walletReplyReview:
+        'Replies from Web3 wallet users may require review.',
+
+      loginToReply:
+        'Log in to reply to this comment.',
+
+      deleteTitle:
+        'Delete this comment?',
+
+      deleteDescription:
+        'This action cannot be undone.',
+
+      adminAvatarAlt:
+        'Admin avatar',
+
+      sessionAvatarAlt:
+        'My avatar',
+
+      openGithubProfile: (name: string) =>
+        `Open ${name}'s GitHub profile`,
     },
+
     friendLinkApplyModal: {
       title: 'Apply for a friend link',
+
       description: [
         'For tech blogs or personal journals using HTTPS and no ads ~',
         'Please add this site first and ensure your site is accessible and compliant ~',
       ],
-      copied: 'Copied',
-      copySiteInfo: 'Copy my site info',
-      cancel: 'Cancel',
-      submitting: 'Submitting',
-      submit: 'Submit',
-      submitted: 'Your friend link application has been submitted for review.',
-      closeLabel: 'Close friend link application',
+
+      copied:
+        'Copied',
+
+      copySiteInfo:
+        'Copy my site info',
+
+      cancel:
+        'Cancel',
+
+      submitting:
+        'Submitting',
+
+      submit:
+        'Submit',
+
+      submitted:
+        'Your friend link application has been submitted for review.',
+
+      closeLabel:
+        'Close friend link application',
+
       fields: {
         name: {
           label: 'Site name',
-          placeholder: 'Yuuri & Spare Time',
+          placeholder: 'Ailoxi',
         },
+
         email: {
           label: 'Contact email (optional, notifications only)',
-          placeholder: 'yeyuqwer@gmail.com',
+          placeholder: 'your@email.com',
         },
+
         description: {
           label: 'Site description',
-          placeholder: 'Part-time full-stack development',
+          placeholder: 'Golang / Full-stack development / Personal blog',
         },
+
         avatarUrl: {
           label: 'Avatar URL',
-          placeholder: 'https://avatars.githubusercontent.com/u/140394258',
+          placeholder: 'https://example.com/avatar.webp',
         },
+
         siteUrl: {
           label: 'Site URL',
-          placeholder: 'https://www.useyeyu.cc/',
+          placeholder: 'https://www.mikuflare.com/',
         },
       },
     },
+
     loginModal: {
-      userInfoTitle: 'User information',
-      loginTitle: 'Login (ゝ∀･)',
-      closeLabel: 'Close login dialog',
-      loading: 'Loading',
-      closeModalLabel: 'Close dialog',
-      signingIn: 'Signing in...',
-      adminDashboard: 'Open dashboard',
-      logout: 'Log out',
-      walletAddress: 'Wallet address',
-      walletSignInStatement: 'Sign in to www.useyeyu.cc with Ethereum',
+      userInfoTitle:
+        'User information',
+
+      loginTitle:
+        'Login (ゝ∀･)',
+
+      closeLabel:
+        'Close login dialog',
+
+      loading:
+        'Loading',
+
+      closeModalLabel:
+        'Close dialog',
+
+      signingIn:
+        'Signing in...',
+
+      adminDashboard:
+        'Open dashboard',
+
+      logout:
+        'Log out',
+
+      walletAddress:
+        'Wallet address',
+
+      walletSignInStatement:
+        'Sign in to www.mikuflare.com with Ethereum',
     },
   },
 } as const satisfies Record<Language, object>

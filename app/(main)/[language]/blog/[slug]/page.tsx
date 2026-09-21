@@ -7,13 +7,8 @@ import { blogs } from '@/db/schema'
 import { getRouteLanguage } from '@/lib/i18n/get-route-language'
 import { BlogDetail } from '@/ui/(main)/blog/[slug]'
 
-export async function generateStaticParams() {
-  const publishedBlogs = await db
-    .select({ slug: blogs.slug })
-    .from(blogs)
-    .where(eq(blogs.isPublished, true))
-
-  return publishedBlogs.map(blog => ({ slug: blog.slug }))
+export function generateStaticParams() {
+  return []
 }
 
 export async function generateMetadata({

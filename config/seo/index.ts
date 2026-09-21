@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import type { Language } from '@/lib/i18n/config'
 
 const sharedMetadata = {
-  metadataBase: new URL('https://www.useyeyu.cc'),
+  metadataBase: new URL('https://www.mikuflare.com'),
   robots: {
     index: true,
     follow: true,
@@ -13,113 +13,188 @@ export const seoMetadata = {
   zh: {
     root: {
       ...sharedMetadata,
+
       title: {
-        default: '叶鱼 & 业余',
-        template: '%s & 叶鱼',
+        default: '黯留星 & Ailoxi',
+        template: '%s & 黯留星',
       },
-      description: '业余全栈开发，生活记录',
+
+      description:
+        '黯留星的个人技术博客，记录 Go 后端开发、Python、自动化、云服务、Linux、自托管与一些有用没用的小工具。',
+
       keywords: [
-        '叶鱼',
-        '业余',
-        '前端开发',
+        '黯留星',
+        'Ailoxi',
+        'Go',
+        'Golang',
+        'Go 后端开发',
+        'Python',
+        'Docker',
+        'Linux',
+        'CI/CD',
+        'Cloud',
+        '云服务',
+        '自动化',
+        '后端开发',
         '全栈开发',
+        '自托管',
+        'Self-hosted',
+        'Blender',
+        '3D',
+        '开发工具',
         '技术博客',
-        'React',
-        'Next.js',
-        'Node.js',
-        'NestJS',
-        'JavaScript',
-        'TypeScript',
-        'Web Development',
       ],
+
       authors: [
         {
-          name: '叶鱼',
-          url: 'https://www.useyeyu.cc',
+          name: '黯留星',
+          url: 'https://www.mikuflare.com',
         },
       ],
-      creator: '叶鱼',
+
+      creator: '黯留星',
     },
+
     home: {
       title: '首页',
-      description: '叶鱼的个人主页，记录全栈开发、设计与生活。',
+
+      description:
+        '黯留星的个人主页。主要折腾 Go 后端、Python、Linux、Docker、CI/CD、云服务与自托管，偶尔也使用 Blender 做一些 3D 和视觉相关的东西。',
+
       alternates: {
         canonical: '/zh',
-        languages: { zh: '/zh', en: '/en' },
+        languages: {
+          zh: '/zh',
+          en: '/en',
+        },
       },
     },
+
     blog: {
       title: '日志',
-      description: '记录全栈开发、设计与生活的文章。',
+
+      description:
+        '记录 Go 后端开发、Python、Linux、Docker、CI/CD、云服务、自托管、工具开发与日常折腾。',
+
       alternates: {
         canonical: '/zh/blog',
-        languages: { zh: '/zh/blog', en: '/en/blog' },
+        languages: {
+          zh: '/zh/blog',
+          en: '/en/blog',
+        },
       },
     },
+
     friends: {
       title: '友链',
-      description: '叶鱼的朋友们与友链申请。',
+
+      description:
+        '黯留星的朋友们，以及技术博客与个人站点的友链申请。',
+
       alternates: {
         canonical: '/zh/friends',
-        languages: { zh: '/zh/friends', en: '/en/friends' },
+        languages: {
+          zh: '/zh/friends',
+          en: '/en/friends',
+        },
       },
     },
-    articleDescription: (title: string) => `阅读叶鱼的文章《${title}》。`,
+
+    articleDescription: (title: string) =>
+      `阅读黯留星的文章《${title}》。`,
   },
+
   en: {
     root: {
       ...sharedMetadata,
+
       title: {
-        default: 'Yuuri & Spare Time',
-        template: '%s & Yuuri',
+        default: 'Ailoxi',
+        template: '%s & Ailoxi',
       },
-      description: 'Full-stack development and notes on life',
+
+      description:
+        'Ailoxi’s personal tech blog about Go backend development, Python, automation, cloud services, Linux, self-hosting, and useful little tools.',
+
       keywords: [
-        'Yuuri',
-        'Frontend Development',
+        'Ailoxi',
+        'Go',
+        'Golang',
+        'Go Backend',
+        'Backend Development',
+        'Python',
+        'Docker',
+        'Linux',
+        'CI/CD',
+        'Cloud',
+        'Cloud Services',
+        'Automation',
         'Full-stack Development',
+        'Self-hosting',
+        'Self-hosted',
+        'Blender',
+        '3D',
+        'Developer Tools',
         'Tech Blog',
-        'React',
-        'Next.js',
-        'Node.js',
-        'NestJS',
-        'JavaScript',
-        'TypeScript',
-        'Web Development',
       ],
+
       authors: [
         {
-          name: 'Yuuri',
-          url: 'https://www.useyeyu.cc',
+          name: 'Ailoxi',
+          url: 'https://www.mikuflare.com',
         },
       ],
-      creator: 'Yuuri',
+
+      creator: 'Ailoxi',
     },
+
     home: {
       title: 'Home',
-      description: "Yuuri's personal site about full-stack development, design, and life.",
+
+      description:
+        'Ailoxi’s personal site about Go backend development, Python, Linux, Docker, CI/CD, cloud services, self-hosting, and occasional Blender experiments.',
+
       alternates: {
         canonical: '/en',
-        languages: { zh: '/zh', en: '/en' },
+        languages: {
+          zh: '/zh',
+          en: '/en',
+        },
       },
     },
+
     blog: {
       title: 'Blog',
-      description: 'Articles about full-stack development, design, and life.',
+
+      description:
+        'Notes on Go backend development, Python, Linux, Docker, CI/CD, cloud services, self-hosting, developer tools, and everyday experiments.',
+
       alternates: {
         canonical: '/en/blog',
-        languages: { zh: '/zh/blog', en: '/en/blog' },
+        languages: {
+          zh: '/zh/blog',
+          en: '/en/blog',
+        },
       },
     },
+
     friends: {
       title: 'Friends',
-      description: "Yuuri's friends and friend link applications.",
+
+      description:
+        'Ailoxi’s friends and friend link applications for personal and technical websites.',
+
       alternates: {
         canonical: '/en/friends',
-        languages: { zh: '/zh/friends', en: '/en/friends' },
+        languages: {
+          zh: '/zh/friends',
+          en: '/en/friends',
+        },
       },
     },
-    articleDescription: (title: string) => `Read "${title}" on Yuuri's blog.`,
+
+    articleDescription: (title: string) =>
+      `Read "${title}" on Ailoxi's blog.`,
   },
 } satisfies Record<
   Language,

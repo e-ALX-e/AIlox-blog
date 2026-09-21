@@ -85,7 +85,12 @@ const serverEnvSchema = z
     BETTER_AUTH_SECRET: z.string().min(32, 'BETTER_AUTH_SECRET must be at least 32 characters'),
 
     // * 上传图片
-    UPLOADTHING_TOKEN: z.string().trim().min(1, 'UPLOADTHING_TOKEN is required'),
+    // * S3 / MinIO 图片存储
+    S3_ENDPOINT: z.url(),
+    S3_ACCESS_KEY: z.string().trim().min(1, 'S3_ACCESS_KEY is required'),
+    S3_SECRET_KEY: z.string().trim().min(1, 'S3_SECRET_KEY is required'),
+    S3_BUCKET: z.string().trim().min(1, 'S3_BUCKET is required'),
+    S3_REGION: z.string().trim().min(1, 'S3_REGION is required'),
 
     // * 邮件通知
     SMTP_HOST: optionalEnvString,

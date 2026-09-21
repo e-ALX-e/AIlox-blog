@@ -4,6 +4,7 @@ import { parseServerEnv } from './config/env/parse-server-env'
 parseServerEnv()
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   images: {
     remotePatterns: [
       {

@@ -56,3 +56,13 @@ scripts/
 
 # what fuck?
 .pnpm-store
+
+# local backups / temporary files
+*.bak
+*.bak2
+
+# generated previews
+/preview/
+
+# local notes
+README.txt

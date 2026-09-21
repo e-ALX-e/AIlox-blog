@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import avatar from '@/config/img/avatar.webp'
+import avatar from '@/config/img/Ailoxi.png'
 import { useTranslations } from '@/ui/components/provider/main/language-provider'
 import { HomeAvatarMotion, HomeTextMotion } from './home-motion'
 import TechStack from './tech-stack'
@@ -26,11 +26,17 @@ export default function ProfileSection() {
 
       <div className="flex flex-col items-center text-center md:translate-y-[5px] md:items-start md:text-left">
         <HomeTextMotion>
-          <h1 className="font-bold text-xl leading-8 sm:text-2xl">{translations.home.greeting}</h1>
+          <h1 className="font-bold text-xl leading-8 sm:text-2xl">
+            {translations.home.greeting}
+          </h1>
         </HomeTextMotion>
+
         <HomeTextMotion>
-          <p className="mt-[22px] font-bold text-[16px] leading-8">{translations.home.role}</p>
+          <p className="mt-[22px] font-bold text-[16px] leading-8">
+            {translations.home.role}
+          </p>
         </HomeTextMotion>
+
         <TechStack />
       </div>
     </header>

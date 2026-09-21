@@ -8,12 +8,14 @@ import remarkRehype from 'remark-rehype'
 import { unified } from 'unified'
 import { rehypeCodeBlockRenderer } from './rehype-code-block-renderer'
 import { rehypeHeadingAnchorRenderer } from './rehype-heading-anchor-renderer'
+import { rehypeImageFramePreviewRenderer } from './rehype-image-frame-preview-renderer'
 
 export const simpleProcessor = unified()
   .use(remarkParse)
   .use(remarkGfm)
   .use(remarkRehype)
   .use(rehypeSanitize)
+  .use(rehypeImageFramePreviewRenderer as never)
   .use(rehypeSlug)
   .use(rehypeHighlight, { detect: false })
   .use(rehypeCodeBlockRenderer as never)

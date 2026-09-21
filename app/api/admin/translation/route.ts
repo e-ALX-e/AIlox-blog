@@ -4,6 +4,7 @@ import { blogs, blogTranslations, translationTasks } from '@/db/schema'
 import { BadRequestError } from '@/lib/common/errors/request'
 import { noPermission } from '@/lib/core/auth/guard'
 import { syncBlogTranslation } from '@/lib/core/translation/sync-blog-translations'
+import { isTranslationQueueWorkerRunning } from '@/lib/core/translation/translation-queue'
 import { translationLanguages } from '@/lib/i18n/config'
 import { readJsonBody } from '@/lib/infra/http/read-json-body'
 import { withResponse } from '@/lib/infra/http/with-response'
@@ -198,6 +199,7 @@ export const GET = withResponse(async () => {
     pendingJobs,
     taskSummary,
     recentTasks,
+    queueWorkerRunning: isTranslationQueueWorkerRunning(),
     skippedUpToDateCount: taskSummary.upToDate,
     totalTranslationSlots,
   }

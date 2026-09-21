@@ -33,6 +33,7 @@ export default async function BlogListPage({ language }: { language: Language })
       .select({
         blogId: blogTranslations.blogId,
         title: blogTranslations.title,
+        sourceUpdatedAt: blogTranslations.sourceUpdatedAt,
       })
       .from(blogTranslations)
       .where(
@@ -45,8 +46,17 @@ export default async function BlogListPage({ language }: { language: Language })
         ),
       )
 
+    const sourceUpdatedAtByBlogId = new Map(
+      records.map(record => [record.id, new Date(record.updatedAt).getTime()]),
+    )
+
     for (const translation of translatedTitles) {
-      localizedTitleByBlogId.set(translation.blogId, translation.title)
+      const sourceUpdatedAt = sourceUpdatedAtByBlogId.get(translation.blogId)
+      const translatedSourceUpdatedAt = new Date(translation.sourceUpdatedAt).getTime()
+
+      if (sourceUpdatedAt != null && translatedSourceUpdatedAt >= sourceUpdatedAt) {
+        localizedTitleByBlogId.set(translation.blogId, translation.title)
+      }
     }
   }
 

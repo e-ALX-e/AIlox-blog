@@ -10,7 +10,20 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const language = getRouteLanguage((await params).language)
 
-  return seoMetadata[language].friends
+  return {
+    ...seoMetadata[language].friends,
+    alternates: {
+      canonical: `/${language}/friends`,
+      languages: {
+        'zh': "/zh/friends",
+        'en': "/en/friends",
+        'zh-TW': "/zh-tw/friends",
+        'ja': "/ja/friends",
+        'ru': "/ru/friends",
+        'de': "/de/friends"
+},
+    },
+  }
 }
 
 export const revalidate = 3600

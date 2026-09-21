@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { translationLanguages } from '@/lib/i18n/config'
 
 export const updateTranslationConfigSchema = z
   .object({
@@ -32,3 +33,8 @@ export const updateTranslationConfigSchema = z
       })
     }
   })
+
+export const syncTranslationSchema = z.object({
+  blogId: z.coerce.number().int().positive(),
+  language: z.enum(translationLanguages),
+})

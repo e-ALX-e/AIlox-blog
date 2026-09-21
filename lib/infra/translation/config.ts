@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { count, eq, sql, sum } from 'drizzle-orm'
+import { count, eq, sum } from 'drizzle-orm'
 import { db } from '@/db/instance'
 import { translationModelConfig, translationUsage } from '@/db/schema'
 import { decryptTranslationSecret, encryptTranslationSecret } from './secret'
@@ -15,9 +15,12 @@ export type TranslationModelConfigRecord = {
 }
 
 export async function getTranslationModelConfig(): Promise<TranslationModelConfigRecord> {
-  const record = await db.query.translationModelConfig?.findFirst?.({
-    where: eq(translationModelConfig.id, CONFIG_ID),
-  })
+  const record = await db
+    .select()
+    .from(translationModelConfig)
+    .where(eq(translationModelConfig.id, CONFIG_ID))
+    .limit(1)
+    .then(rows => rows[0])
 
   if (record == null) {
     return {

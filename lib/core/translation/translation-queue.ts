@@ -96,6 +96,7 @@ async function ensureTasksForBlogs(blogIds?: number[]) {
         language: translationTasks.language,
         sourceUpdatedAt: translationTasks.sourceUpdatedAt,
         status: translationTasks.status,
+        force: translationTasks.force,
         attempts: translationTasks.attempts,
         updatedAt: translationTasks.updatedAt,
       })
@@ -162,6 +163,7 @@ async function ensureTasksForBlogs(blogIds?: number[]) {
         language,
         sourceUpdatedAt: blog.updatedAt,
         status: 'queued',
+        force: false,
         attempts: 0,
         error: null,
         startedAt: null,
@@ -192,6 +194,83 @@ export async function enqueueBlogTranslationTasks(blogId: number) {
   return await ensureTasksForBlogs([blogId])
 }
 
+export async function enqueueForcedTranslationTask(
+  blogId: number,
+  language: TranslationLanguage,
+) {
+  const blog = await db
+    .select({
+      id: blogs.id,
+      updatedAt: blogs.updatedAt,
+    })
+    .from(blogs)
+    .where(and(eq(blogs.id, blogId), eq(blogs.isPublished, true)))
+    .limit(1)
+    .then(rows => rows[0])
+
+  if (blog == null) {
+    throw new Error('文章不存在或未发布。')
+  }
+
+  const existingTask = await db
+    .select({
+      id: translationTasks.id,
+      status: translationTasks.status,
+    })
+    .from(translationTasks)
+    .where(
+      and(
+        eq(translationTasks.blogId, blog.id),
+        eq(translationTasks.language, language),
+        eq(translationTasks.sourceUpdatedAt, blog.updatedAt),
+      ),
+    )
+    .limit(1)
+    .then(rows => rows[0])
+
+  if (existingTask?.status === 'processing') {
+    throw new Error('该文章的这个语言正在翻译，请先等待完成或取消当前任务。')
+  }
+
+  const now = new Date()
+  const [task] = await db
+    .insert(translationTasks)
+    .values({
+      blogId: blog.id,
+      language,
+      sourceUpdatedAt: blog.updatedAt,
+      status: 'queued',
+      force: true,
+      attempts: existingTask?.id != null ? undefined : 0,
+      error: null,
+      startedAt: null,
+      finishedAt: null,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [
+        translationTasks.blogId,
+        translationTasks.language,
+        translationTasks.sourceUpdatedAt,
+      ],
+      set: {
+        status: 'queued',
+        force: true,
+        error: null,
+        startedAt: null,
+        finishedAt: null,
+        updatedAt: now,
+      },
+    })
+    .returning({
+      id: translationTasks.id,
+      blogId: translationTasks.blogId,
+      language: translationTasks.language,
+    })
+
+  return task
+}
+
 async function claimNextQueuedTask() {
   while (true) {
     const task = await db
@@ -199,6 +278,7 @@ async function claimNextQueuedTask() {
         id: translationTasks.id,
         blogId: translationTasks.blogId,
         language: translationTasks.language,
+        force: translationTasks.force,
       })
       .from(translationTasks)
       .where(eq(translationTasks.status, 'queued'))
@@ -229,6 +309,7 @@ async function claimNextQueuedTask() {
         id: translationTasks.id,
         blogId: translationTasks.blogId,
         language: translationTasks.language,
+        force: translationTasks.force,
       })
 
     if (claimed != null) return claimed
@@ -286,6 +367,7 @@ async function processQueue() {
         {
           taskId: task.id,
           taskAlreadyClaimed: true,
+          force: task.force,
           signal: controller.signal,
         },
       )

@@ -195,7 +195,7 @@ export default function Header() {
                   <DropdownMenuContent
                     align="end"
                     sideOffset={10}
-                    className="min-w-44 rounded-xl p-1.5"
+                    className="min-w-44 overflow-hidden rounded-2xl border border-white/45 bg-[linear-gradient(145deg,rgba(255,255,255,0.46),rgba(255,255,255,0.16)_52%,rgba(255,255,255,0.08))] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.7),inset_0_-1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl backdrop-saturate-150 dark:border-white/16 dark:bg-[linear-gradient(145deg,rgba(255,255,255,0.13),rgba(24,24,27,0.42)_55%,rgba(9,9,11,0.32))] dark:shadow-[0_18px_54px_rgba(0,0,0,0.46),inset_0_1px_0_rgba(255,255,255,0.18)]"
                   >
                     <DropdownMenuRadioGroup
                       value={language}
@@ -209,7 +209,7 @@ export default function Header() {
                         <DropdownMenuRadioItem
                           key={locale}
                           value={locale}
-                          className="cursor-pointer rounded-lg"
+                          className="cursor-pointer rounded-xl border border-transparent text-zinc-800 transition-[background-color,border-color,box-shadow,transform] duration-200 focus:bg-white/55 focus:text-zinc-950 focus:shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_6px_18px_rgba(31,41,55,0.08)] data-checked:border-white/55 data-checked:bg-white/48 data-checked:shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_7px_20px_rgba(31,41,55,0.1)] dark:text-zinc-100 dark:focus:bg-white/12 dark:focus:text-white dark:data-checked:border-white/18 dark:data-checked:bg-white/12 dark:data-checked:shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_7px_22px_rgba(0,0,0,0.2)]"
                         >
                           <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
                             <span>{languageDisplayName[locale]}</span>

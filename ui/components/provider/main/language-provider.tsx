@@ -41,8 +41,8 @@ function getDocumentTitle(pathname: string, language: Language, currentTitle: st
         ? seoMetadata[language].blog.title
         : routePathname === '/friends'
           ? seoMetadata[language].friends.title
-          : currentTitle.replace(/\s*&\s*(?:叶鱼|Yuuri)$/, '')
-  const siteName = language === 'en' ? 'Yuuri' : '叶鱼'
+          : currentTitle.replace(/\s*&\s*(?:黯留星|Ailoxi|叶鱼|Yuuri)$/, '')
+  const siteName = language === 'zh' || language === 'zh-tw' ? '黯留星' : 'Ailoxi'
 
   return `${pageTitle} & ${siteName}`
 }

@@ -3,13 +3,14 @@
 import { usePathname } from 'next/navigation'
 import { createContext, use, useLayoutEffect, useState } from 'react'
 import { seoMetadata } from '@/config/seo'
-import { isLanguage, type Language, languageHtmlLang } from '@/lib/i18n/config'
+import { isLanguage, type Language, languageHtmlLang, languages } from '@/lib/i18n/config'
 import { getRoutePathname } from '@/lib/i18n/get-route-pathname'
 import { messages } from '@/lib/i18n/messages'
 
 const LanguageContext = createContext<
   | {
       language: Language
+      nextLanguage: Language
       isLanguageChanging: boolean
       toggleLanguage: () => void
     }
@@ -52,7 +53,8 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [targetLanguage, setTargetLanguage] = useState(routeLanguage)
   const isLanguageChanging = targetLanguage !== routeLanguage
   const language = isLanguageChanging ? targetLanguage : routeLanguage
-  const nextLanguage = language === 'zh' ? 'en' : 'zh'
+  const languageIndex = languages.indexOf(language)
+  const nextLanguage = languages[(languageIndex + 1) % languages.length]
   const nextPathname = getLocalizedPathname(pathname, nextLanguage)
 
   useLayoutEffect(() => {
@@ -72,6 +74,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   const value = {
     language,
+    nextLanguage,
     isLanguageChanging,
     toggleLanguage,
   }

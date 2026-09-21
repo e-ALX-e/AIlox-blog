@@ -361,12 +361,30 @@ function getUsage(json: TranslationApiJson): Usage {
   }
 }
 
+function getLanguageSpecificRules(language: TranslationLanguage) {
+  if (language === 'zh-tw') {
+    return `Traditional Chinese conversion rules:
+- Treat this as STRICT Simplified Chinese -> Traditional Chinese script conversion, not localization or paraphrasing.
+- Preserve the original wording, sentence structure, tone, punctuation, terminology, and word choices as closely as possible.
+- Do NOT replace a term with a regional synonym just because it is common in Taiwan/Hong Kong.
+- In particular, keep terms such as "博客" as "博客" instead of changing them to "部落格", keep "支持" as "支持" instead of changing it to "支援", and keep "打开" as "打開" instead of changing it to "開啟".
+- Convert only characters/orthography that actually need Simplified -> Traditional conversion, for example: "现在" -> "現在", "语言" -> "語言", "后续" -> "後續".
+- Do not rewrite sentences for style. The output should read like the same Chinese article written in Traditional Chinese characters.`
+  }
+
+  return `Translation style rules:
+- Preserve the author's terminology and sentence intent.
+- Do not over-localize technical/product terminology.
+- English words already present in the Chinese source should remain English unless translation is genuinely necessary for comprehension.`
+}
+
 async function translateChunk(input: {
   baseUrl: string
   apiKey: string
   model: string
   title: string
   content: string
+  targetLanguage: TranslationLanguage
   targetLanguageName: string
   part: number
   totalParts: number
@@ -389,6 +407,8 @@ async function translateChunk(input: {
             content: `You are a technical Markdown translator. Translate the supplied Chinese Markdown into ${input.targetLanguageName}.
 
 This is part ${input.part} of ${input.totalParts} of one article. Do not add part numbers, separators, summaries, introductions, or conclusions.
+
+${getLanguageSpecificRules(input.targetLanguage)}
 
 Rules:
 - The supplied Chinese title and Markdown are the canonical source of truth. Translate only from this Chinese source; never infer from an older translated version.
@@ -492,6 +512,7 @@ export async function translateMarkdown(input: {
         model: config.model,
         title: input.title,
         content: segment.text,
+        targetLanguage: input.targetLanguage,
         targetLanguageName,
         part,
         totalParts,
@@ -524,6 +545,7 @@ export async function translateMarkdown(input: {
       model: config.model,
       title: input.title,
       content: '',
+      targetLanguage: input.targetLanguage,
       targetLanguageName,
       part: 1,
       totalParts: 1,

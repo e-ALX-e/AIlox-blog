@@ -5,7 +5,12 @@ import { Languages } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { languageShortLabel } from '@/lib/i18n/config'
+import {
+  isLanguage,
+  languageDisplayName,
+  languageShortLabel,
+  languages,
+} from '@/lib/i18n/config'
 import { getRoutePathname } from '@/lib/i18n/get-route-pathname'
 import { cn } from '@/lib/utils/common/shadcn'
 import { useHasCompletedHomeLoading, useHomeLoadingActions } from '@/store/use-home-loading-store'
@@ -16,6 +21,13 @@ import {
   waveLinkTriggerClassName,
   waveLinkUnderlineClassName,
 } from '@/ui/components/shared/wave-link'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/ui/shadcn/dropdown-menu'
 import { navigationConfig } from './constant'
 import { useScrollVisibility } from './hooks/use-scroll-visibility'
 import { NavItem } from './nav-item'
@@ -74,7 +86,7 @@ export default function Header() {
   const { completeHomeLoading } = useHomeLoadingActions()
   const [hasEntered, setHasEntered] = useState(false)
   const [wordmarkAnimationKey, setWordmarkAnimationKey] = useState(0)
-  const { language, nextLanguage, toggleLanguage } = useLanguage()
+  const { language, changeLanguage } = useLanguage()
   const translations = useTranslations()
   const languageOffset = language === 'en' ? '100%' : '-100%'
   const languagePathPrefix = `/${language}`
@@ -116,20 +128,20 @@ export default function Header() {
     >
       <div className="grid h-full grid-cols-[5rem_1fr] items-center sm:grid-cols-[7rem_1fr]">
         <WaveLink
-        href={languagePathPrefix}
-        withWaveUnderline={false}
-        className="flex h-full shrink-0 items-center whitespace-nowrap pl-4 leading-none sm:pl-5"
-        aria-label={translations.header.homeLabel}
-        onClick={() =>
-          setWordmarkAnimationKey(animationKey => animationKey + 1)
-        }
-      >
-        <HandwritingWordmark
-          key={wordmarkAnimationKey}
-          delay={wordmarkAnimationKey === 0 ? headerEntranceDelay : 0}
-          isVisible={!isWaitingForHomeLoading}
-        />
-      </WaveLink>
+          href={languagePathPrefix}
+          withWaveUnderline={false}
+          className="flex h-full shrink-0 items-center whitespace-nowrap pl-4 leading-none sm:pl-5"
+          aria-label={translations.header.homeLabel}
+          onClick={() =>
+            setWordmarkAnimationKey(animationKey => animationKey + 1)
+          }
+        >
+          <HandwritingWordmark
+            key={wordmarkAnimationKey}
+            delay={wordmarkAnimationKey === 0 ? headerEntranceDelay : 0}
+            isVisible={!isWaitingForHomeLoading}
+          />
+        </WaveLink>
 
         <nav
           aria-label={translations.header.navigationLabel}
@@ -138,31 +150,94 @@ export default function Header() {
           {navigationConfig.map((route, routeIndex) => {
             const isActive = route.type !== 'button' && route.pattern.test(currentPathname)
             const isLanguageRoute = route.path === '/language'
+            const itemClassName = cn(
+              'flex h-full items-center justify-center text-xs leading-none transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-white focus-visible:outline-offset-[-4px] sm:text-lg',
+              waveLinkTriggerClassName,
+              route.type === 'button' && 'cursor-pointer',
+              isActive ? 'font-bold text-white' : 'font-normal text-white/90 hover:text-white',
+            )
+
+            if (isLanguageRoute) {
+              return (
+                <DropdownMenu key={route.path}>
+                  <DropdownMenuTrigger
+                    aria-label={translations.header.switchLanguageLabel}
+                    className={itemClassName}
+                  >
+                    <motion.span
+                      className="inline-flex items-center gap-1"
+                      initial={shouldReduceMotion ? false : { opacity: 0, y: -8 }}
+                      animate={
+                        shouldReduceMotion || !isWaitingForHomeLoading
+                          ? { opacity: 1, y: 0 }
+                          : { opacity: 0, y: -8 }
+                      }
+                      transition={
+                        shouldReduceMotion
+                          ? { duration: 0 }
+                          : {
+                              delay:
+                                headerEntranceDelay +
+                                navigationEntranceDelay +
+                                routeIndex * navigationEntranceStagger,
+                              duration: 0.36,
+                              ease: [0.22, 1, 0.36, 1],
+                            }
+                      }
+                    >
+                      <Languages aria-hidden="true" className="size-3.5 shrink-0 sm:size-4" />
+                      <span className="w-6 text-center">
+                        {languageShortLabel[language]}
+                      </span>
+                    </motion.span>
+                  </DropdownMenuTrigger>
+
+                  <DropdownMenuContent
+                    align="end"
+                    sideOffset={10}
+                    className="min-w-44 rounded-xl p-1.5"
+                  >
+                    <DropdownMenuRadioGroup
+                      value={language}
+                      onValueChange={value => {
+                        if (isLanguage(value)) {
+                          changeLanguage(value)
+                        }
+                      }}
+                    >
+                      {languages.map(locale => (
+                        <DropdownMenuRadioItem
+                          key={locale}
+                          value={locale}
+                          className="cursor-pointer rounded-lg"
+                        >
+                          <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                            <span>{languageDisplayName[locale]}</span>
+                            <span className="font-mono text-[10px] text-muted-foreground uppercase">
+                              {locale}
+                            </span>
+                          </span>
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )
+            }
 
             return (
               <NavItem
                 key={route.path}
                 item={route}
                 aria-current={isActive ? 'page' : undefined}
-                aria-label={
-                  isLanguageRoute
-                    ? translations.header.switchLanguageLabel
-                    : translations.header.routes[route.pathName]
-                }
-                onButtonClick={isLanguageRoute ? toggleLanguage : undefined}
-                className={cn(
-                  'flex h-full items-center justify-center text-xs leading-none transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-white focus-visible:outline-offset-[-4px] sm:text-lg',
-                  waveLinkTriggerClassName,
-                  route.type === 'button' && 'cursor-pointer',
-                  isActive ? 'font-bold text-white' : 'font-normal text-white/90 hover:text-white',
-                )}
+                aria-label={translations.header.routes[route.pathName]}
+                className={itemClassName}
               >
                 <motion.span
                   className={cn(
                     waveLinkUnderlineClassName,
                     'after:-bottom-1 after:bg-[color-mix(in_srgb,var(--theme-accent)_50%,white)]',
                     'inline-flex items-center',
-                    isLanguageRoute && 'gap-1',
                     isActive && 'after:[clip-path:inset(0)]',
                   )}
                   initial={shouldReduceMotion ? false : { opacity: 0, y: -8 }}
@@ -184,15 +259,7 @@ export default function Header() {
                         }
                   }
                 >
-                  {isLanguageRoute && (
-                    <Languages aria-hidden="true" className="size-3.5 shrink-0 sm:size-4" />
-                  )}
-                  <span
-                    className={cn(
-                      'grid h-[1.25em] overflow-hidden whitespace-nowrap leading-[1.25]',
-                      isLanguageRoute && 'w-5 text-center',
-                    )}
-                  >
+                  <span className="grid h-[1.25em] overflow-hidden whitespace-nowrap leading-[1.25]">
                     <AnimatePresence initial={false}>
                       <motion.span
                         key={language}
@@ -207,7 +274,7 @@ export default function Header() {
                             : { duration: 0.32, ease: [0.22, 1, 0.36, 1] }
                         }
                       >
-                        {isLanguageRoute ? languageShortLabel[nextLanguage] : translations.header.routes[route.pathName]}
+                        {translations.header.routes[route.pathName]}
                       </motion.span>
                     </AnimatePresence>
                   </span>

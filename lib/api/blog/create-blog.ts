@@ -11,5 +11,6 @@ export async function createBlog(params: CreateBlogDTO) {
     url: 'admin/blog',
     method: 'POST',
     json: params,
+    timeout: 180_000,
   })
 }

@@ -9,9 +9,17 @@ const avatarBlurDataUrl =
 
 export function FriendAvatarImage({ avatarUrl, name }: { avatarUrl: string; name: string }) {
   const [isAvatarLoaded, setIsAvatarLoaded] = useState(false)
+  const isSvgAvatar = /\.svg(?:$|[?#])/i.test(avatarUrl)
 
   return (
-    <span className="relative size-10 shrink-0 overflow-hidden rounded-full bg-zinc-100 ring-1 ring-zinc-200 md:size-12 dark:bg-zinc-800 dark:ring-zinc-700">
+    <span
+      className={cn(
+        'relative size-10 shrink-0 overflow-hidden md:size-12',
+        isSvgAvatar
+          ? 'rounded-xl bg-transparent'
+          : 'rounded-full bg-zinc-100 ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700',
+      )}
+    >
       <Image
         src={avatarUrl}
         alt={name}
@@ -19,8 +27,8 @@ export function FriendAvatarImage({ avatarUrl, name }: { avatarUrl: string; name
         sizes="(max-width: 767px) 40px, 48px"
         draggable={false}
         unoptimized
-        placeholder="blur"
-        blurDataURL={avatarBlurDataUrl}
+        placeholder={isSvgAvatar ? 'empty' : 'blur'}
+        blurDataURL={isSvgAvatar ? undefined : avatarBlurDataUrl}
         onLoad={() => {
           setIsAvatarLoaded(true)
         }}
@@ -29,13 +37,15 @@ export function FriendAvatarImage({ avatarUrl, name }: { avatarUrl: string; name
           isAvatarLoaded ? 'scale-100 opacity-100 blur-0' : 'scale-105 opacity-80 blur-sm',
         )}
       />
-      <span
-        aria-hidden="true"
-        className={cn(
-          'pointer-events-none absolute inset-0 z-10 bg-zinc-100 transition-opacity duration-500 dark:bg-zinc-800',
-          isAvatarLoaded ? 'opacity-0' : 'animate-pulse opacity-100',
-        )}
-      />
+      {!isSvgAvatar ? (
+        <span
+          aria-hidden="true"
+          className={cn(
+            'pointer-events-none absolute inset-0 z-10 bg-zinc-100 transition-opacity duration-500 dark:bg-zinc-800',
+            isAvatarLoaded ? 'opacity-0' : 'animate-pulse opacity-100',
+          )}
+        />
+      ) : null}
     </span>
   )
 }

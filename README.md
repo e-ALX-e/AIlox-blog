@@ -175,6 +175,32 @@ Google:
 https://www.mikuflare.com/api/auth/callback/google
 ```
 
+## AI 多语言翻译
+
+后台新增 `/admin/translation` 模型配置页，可配置任意兼容 OpenAI Chat Completions 的第三方模型接口：
+
+- API Base URL
+- 模型名称
+- API Key
+- 自动翻译开关
+
+API Key 会使用服务端 `BETTER_AUTH_SECRET` 派生密钥进行 AES-256-GCM 加密后保存到 PostgreSQL，不会在后台接口中回显明文。
+
+当前文章语言：
+
+- `/zh`：简体中文原文
+- `/en`：English
+- `/zh-tw`：繁體中文
+- `/ja`：日本語
+- `/ru`：Русский
+- `/de`：Deutsch
+
+文章首次发布时会自动生成并持久化其它语言版本；已发布文章修改标题或 Markdown 正文并保存时，会立即重新翻译并更新对应语言版本。若翻译失败或译文已经落后于原文，前台会回退显示中文原文，避免展示过期译文。
+
+后台同时统计翻译 API 返回的输入 Token、输出 Token、总 Token 和调用次数，并按目标语言汇总。模型供应商未返回 `usage` 时，对应 Token 数会记录为 0。
+
+已有文章可以在后台 AI 翻译页面点击“重新翻译全部已发布文章”进行一次性补齐。
+
 ## Docker 部署
 
 仓库已包含：

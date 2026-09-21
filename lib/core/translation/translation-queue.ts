@@ -147,6 +147,7 @@ async function ensureTasksForBlogs(blogIds?: number[]) {
             .update(translationTasks)
             .set({
               status: 'queued',
+              force: false,
               error: null,
               finishedAt: null,
               updatedAt: new Date(),
@@ -216,6 +217,7 @@ export async function enqueueForcedTranslationTask(
     .select({
       id: translationTasks.id,
       status: translationTasks.status,
+      attempts: translationTasks.attempts,
     })
     .from(translationTasks)
     .where(
@@ -241,7 +243,7 @@ export async function enqueueForcedTranslationTask(
       sourceUpdatedAt: blog.updatedAt,
       status: 'queued',
       force: true,
-      attempts: existingTask?.id != null ? undefined : 0,
+      attempts: existingTask?.attempts ?? 0,
       error: null,
       startedAt: null,
       finishedAt: null,

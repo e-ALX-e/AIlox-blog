@@ -1,6 +1,7 @@
 import type { SQL } from 'drizzle-orm'
 import { and, count, countDistinct, desc, eq, inArray, like, ne } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
 import { db } from '@/db/instance'
 import { blogs, blogTags, blogToBlogTag, siteComments } from '@/db/schema'
 import { BadRequestError } from '@/lib/common/errors/request'
@@ -49,6 +50,28 @@ function revalidateBlogPaths(...slugs: Array<string | undefined>) {
       revalidatePath(`/${language}/blog/${encodeURIComponent(slug)}`)
     }
   }
+}
+
+function scheduleBlogTranslation(blogId: number, ...slugs: Array<string | undefined>) {
+  after(async () => {
+    try {
+      const result = await syncBlogTranslations(blogId)
+
+      if (result.failedLanguages.length > 0) {
+        console.error('[translation] automatic translation completed with failures', {
+          blogId,
+          failures: result.failedLanguages,
+        })
+      }
+    } catch (error) {
+      console.error('[translation] automatic translation failed', {
+        blogId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      revalidateBlogPaths(...slugs)
+    }
+  })
 }
 
 export const GET = withResponse(async request => {
@@ -198,32 +221,14 @@ export const POST = withResponse(async request => {
 
   revalidateBlogPaths(created.slug)
 
-  let translation:
-    | Awaited<ReturnType<typeof syncBlogTranslations>>
-    | { attempted: true; translatedLanguages: string[]; failedLanguages: Array<{ language: string; error: string }> }
-    | undefined
-
   if (created.isPublished) {
-    try {
-      translation = await syncBlogTranslations(created.id)
-    } catch (error) {
-      translation = {
-        attempted: true,
-        translatedLanguages: [],
-        failedLanguages: [
-          {
-            language: 'all',
-            error: error instanceof Error ? error.message : String(error),
-          },
-        ],
-      }
-    }
+    scheduleBlogTranslation(created.id, created.slug)
   }
 
   return {
     message: 'Created.',
     data: created,
-    translation,
+    translationScheduled: created.isPublished,
   }
 })
 
@@ -322,32 +327,14 @@ export const PATCH = withResponse(async request => {
   const becamePublished = !existingBlog.isPublished && updated.isPublished
   const shouldTranslate = updated.isPublished && (sourceChanged || becamePublished)
 
-  let translation:
-    | Awaited<ReturnType<typeof syncBlogTranslations>>
-    | { attempted: true; translatedLanguages: string[]; failedLanguages: Array<{ language: string; error: string }> }
-    | undefined
-
   if (shouldTranslate) {
-    try {
-      translation = await syncBlogTranslations(updated.id)
-    } catch (error) {
-      translation = {
-        attempted: true,
-        translatedLanguages: [],
-        failedLanguages: [
-          {
-            language: 'all',
-            error: error instanceof Error ? error.message : String(error),
-          },
-        ],
-      }
-    }
+    scheduleBlogTranslation(updated.id, existingBlog.slug, updated.slug)
   }
 
   return {
     message: 'Updated.',
     data: updated,
-    translation,
+    translationScheduled: shouldTranslate,
   }
 })
 

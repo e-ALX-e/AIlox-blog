@@ -15,6 +15,11 @@ export type TranslationUsageStats = {
   }>
 }
 
+export type TranslationJob = {
+  blogId: number
+  language: TranslationLanguage
+}
+
 export type TranslationAdminState = {
   config: {
     enabled: boolean
@@ -23,7 +28,9 @@ export type TranslationAdminState = {
     hasApiKey: boolean
   }
   usage: TranslationUsageStats
-  publishedBlogIds: number[]
+  pendingJobs: TranslationJob[]
+  skippedUpToDateCount: number
+  totalTranslationSlots: number
 }
 
 export async function getTranslationAdminState() {
@@ -49,15 +56,13 @@ export async function updateTranslationConfig(params: {
   })
 }
 
-export async function syncTranslation(params: {
-  blogId: number
-  language: TranslationLanguage
-}) {
+export async function syncTranslation(params: TranslationJob) {
   return await apiRequest<{
     message: string
     result: {
       attempted: boolean
       translated: boolean
+      skipped: boolean
       language: TranslationLanguage
     }
     usage: TranslationUsageStats

@@ -16,6 +16,21 @@ import { syncTranslationSchema, updateTranslationConfigSchema } from './schema'
 
 const ACTIVE_TASK_TTL_MS = 3 * 60 * 1000
 
+function hasPostgresErrorCode(error: unknown, expectedCode: string) {
+  let current: unknown = error
+
+  for (let depth = 0; depth < 6 && current != null; depth += 1) {
+    if (typeof current !== 'object') return false
+
+    const candidate = current as { code?: unknown; cause?: unknown }
+
+    if (candidate.code === expectedCode) return true
+    current = candidate.cause
+  }
+
+  return false
+}
+
 export const GET = withResponse(async () => {
   if (await noPermission()) {
     throw new BadRequestError('Insufficient permissions.')
@@ -36,36 +51,63 @@ export const GET = withResponse(async () => {
   ])
 
   const blogIds = publishedBlogs.map(blog => blog.id)
-  const [existingTranslations, taskRows] =
-    blogIds.length === 0
-      ? [[], []]
-      : await Promise.all([
-          db
-            .select({
-              blogId: blogTranslations.blogId,
-              language: blogTranslations.language,
-              sourceUpdatedAt: blogTranslations.sourceUpdatedAt,
-            })
-            .from(blogTranslations)
-            .where(inArray(blogTranslations.blogId, blogIds)),
-          db
-            .select({
-              id: translationTasks.id,
-              blogId: translationTasks.blogId,
-              language: translationTasks.language,
-              sourceUpdatedAt: translationTasks.sourceUpdatedAt,
-              status: translationTasks.status,
-              attempts: translationTasks.attempts,
-              error: translationTasks.error,
-              startedAt: translationTasks.startedAt,
-              finishedAt: translationTasks.finishedAt,
-              updatedAt: translationTasks.updatedAt,
-            })
-            .from(translationTasks)
-            .where(inArray(translationTasks.blogId, blogIds))
-            .orderBy(desc(translationTasks.updatedAt))
-            .limit(100),
-        ])
+  let existingTranslations: Array<{
+    blogId: number
+    language: string
+    sourceUpdatedAt: Date
+  }> = []
+  let taskRows: Array<{
+    id: number
+    blogId: number
+    language: string
+    sourceUpdatedAt: Date
+    status: string
+    attempts: number
+    error: string | null
+    startedAt: Date | null
+    finishedAt: Date | null
+    updatedAt: Date
+  }> = []
+
+  if (blogIds.length > 0) {
+    try {
+      ;[existingTranslations, taskRows] = await Promise.all([
+        db
+          .select({
+            blogId: blogTranslations.blogId,
+            language: blogTranslations.language,
+            sourceUpdatedAt: blogTranslations.sourceUpdatedAt,
+          })
+          .from(blogTranslations)
+          .where(inArray(blogTranslations.blogId, blogIds)),
+        db
+          .select({
+            id: translationTasks.id,
+            blogId: translationTasks.blogId,
+            language: translationTasks.language,
+            sourceUpdatedAt: translationTasks.sourceUpdatedAt,
+            status: translationTasks.status,
+            attempts: translationTasks.attempts,
+            error: translationTasks.error,
+            startedAt: translationTasks.startedAt,
+            finishedAt: translationTasks.finishedAt,
+            updatedAt: translationTasks.updatedAt,
+          })
+          .from(translationTasks)
+          .where(inArray(translationTasks.blogId, blogIds))
+          .orderBy(desc(translationTasks.updatedAt))
+          .limit(100),
+      ])
+    } catch (error) {
+      if (hasPostgresErrorCode(error, '42P01')) {
+        throw new BadRequestError(
+          '翻译任务表尚未创建。请在服务器执行 docker compose --profile tools run --rm db-init，然后重启 app。',
+        )
+      }
+
+      throw error
+    }
+  }
 
   const translationByKey = new Map(
     existingTranslations.map(translation => [

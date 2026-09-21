@@ -1,7 +1,7 @@
 'use client'
 
-import { usePathname } from 'next/navigation'
-import { createContext, use, useLayoutEffect, useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
+import { createContext, startTransition, use, useLayoutEffect, useState } from 'react'
 import { seoMetadata } from '@/config/seo'
 import { isLanguage, type Language, languageHtmlLang, languages } from '@/lib/i18n/config'
 import { getRoutePathname } from '@/lib/i18n/get-route-pathname'
@@ -50,26 +50,36 @@ function getDocumentTitle(pathname: string, language: Language, currentTitle: st
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const routeLanguage = requireLanguage(pathname.split('/')[1] ?? '')
-  const [targetLanguage, setTargetLanguage] = useState(routeLanguage)
-  const isLanguageChanging = targetLanguage !== routeLanguage
-  const language = isLanguageChanging ? targetLanguage : routeLanguage
+  const [pendingLanguage, setPendingLanguage] = useState<Language | null>(null)
+  const language = pendingLanguage ?? routeLanguage
+  const isLanguageChanging = pendingLanguage != null && pendingLanguage !== routeLanguage
   const languageIndex = languages.indexOf(language)
   const nextLanguage = languages[(languageIndex + 1) % languages.length]
 
   useLayoutEffect(() => {
+    if (pendingLanguage === routeLanguage) {
+      setPendingLanguage(null)
+    }
+
     document.documentElement.lang = languageHtmlLang[language]
     document.title = getDocumentTitle(pathname, language, document.title)
-  }, [language, pathname])
+  }, [language, pathname, pendingLanguage, routeLanguage])
 
   const changeLanguage = (next: Language) => {
     if (isLanguageChanging || next === language) return
 
     const url = new URL(window.location.href)
-
     url.pathname = getLocalizedPathname(pathname, next)
-    setTargetLanguage(next)
-    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+    const href = `${url.pathname}${url.search}${url.hash}`
+
+    // Update client-side labels immediately, but also navigate through the
+    // Next.js router so Server Components (blog list/detail) are re-fetched.
+    setPendingLanguage(next)
+    startTransition(() => {
+      router.replace(href, { scroll: false })
+    })
   }
 
   const toggleLanguage = () => {

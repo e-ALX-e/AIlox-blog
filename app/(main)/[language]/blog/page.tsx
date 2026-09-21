@@ -10,7 +10,20 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const language = getRouteLanguage((await params).language)
 
-  return seoMetadata[language].blog
+  return {
+    ...seoMetadata[language].blog,
+    alternates: {
+      canonical: `/${language}/blog`,
+      languages: {
+        'zh': "/zh/blog",
+        'en': "/en/blog",
+        'zh-TW': "/zh-tw/blog",
+        'ja': "/ja/blog",
+        'ru': "/ru/blog",
+        'de': "/de/blog"
+},
+    },
+  }
 }
 
 export default async function Page({

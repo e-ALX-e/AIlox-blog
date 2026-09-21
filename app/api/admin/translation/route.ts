@@ -84,6 +84,7 @@ export const GET = withResponse(async () => {
               language: translationTasks.language,
               sourceUpdatedAt: translationTasks.sourceUpdatedAt,
               status: translationTasks.status,
+              force: translationTasks.force,
               attempts: translationTasks.attempts,
               error: translationTasks.error,
               startedAt: translationTasks.startedAt,
@@ -120,15 +121,16 @@ export const GET = withResponse(async () => {
     translationLanguages.flatMap(language => {
       const key = `${blog.id}:${language}`
       const translation = translationByKey.get(key)
+      const task = taskByCurrentSourceKey.get(key)
 
       if (
         translation != null &&
-        translation.sourceUpdatedAt.getTime() >= blog.updatedAt.getTime()
+        translation.sourceUpdatedAt.getTime() >= blog.updatedAt.getTime() &&
+        task?.force !== true
       ) {
         return []
       }
 
-      const task = taskByCurrentSourceKey.get(key)
       if (task == null) return []
 
       return [
@@ -138,6 +140,7 @@ export const GET = withResponse(async () => {
           blogTitle: blog.title,
           language,
           status: task.status,
+          force: task.force,
           attempts: task.attempts,
           error: task.error,
           updatedAt: task.updatedAt,
@@ -175,6 +178,10 @@ export const GET = withResponse(async () => {
     pendingJobs,
     taskSummary,
     recentTasks,
+    publishedBlogs: publishedBlogs.map(blog => ({
+      id: blog.id,
+      title: blog.title,
+    })),
     queueWorkerRunning: isTranslationQueueWorkerRunning(),
     skippedUpToDateCount: taskSummary.upToDate,
     totalTranslationSlots,

@@ -15,12 +15,17 @@ import { sileo } from 'sileo'
 import {
   controlTranslationTasks,
   getTranslationAdminState,
+  retranslateBlogLanguage,
   runTranslationQueue,
   type TranslationAdminState,
   type TranslationJob,
   updateTranslationConfig,
 } from '@/lib/api/translation/admin'
-import { languageDisplayName } from '@/lib/i18n/config'
+import {
+  languageDisplayName,
+  translationLanguages,
+  type TranslationLanguage,
+} from '@/lib/i18n/config'
 import { cn } from '@/lib/utils/common/shadcn'
 import { Button } from '@/ui/shadcn/button'
 import { Input } from '@/ui/shadcn/input'
@@ -99,6 +104,7 @@ export function AdminTranslationPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
   const [isControlling, setIsControlling] = useState(false)
+  const [isRetranslating, setIsRetranslating] = useState(false)
   const [enabled, setEnabled] = useState(false)
   const [baseUrl, setBaseUrl] = useState('')
   const [showBaseUrl, setShowBaseUrl] = useState(false)
@@ -109,6 +115,9 @@ export function AdminTranslationPage() {
   const [pendingJobs, setPendingJobs] = useState<TranslationJob[]>([])
   const [taskSummary, setTaskSummary] = useState(emptyTaskSummary)
   const [recentTasks, setRecentTasks] = useState<TranslationAdminState['recentTasks']>([])
+  const [publishedBlogs, setPublishedBlogs] = useState<TranslationAdminState['publishedBlogs']>([])
+  const [selectedBlogId, setSelectedBlogId] = useState('')
+  const [selectedLanguage, setSelectedLanguage] = useState<TranslationLanguage>('en')
   const [queueWorkerRunning, setQueueWorkerRunning] = useState(false)
   const [skippedUpToDateCount, setSkippedUpToDateCount] = useState(0)
   const [totalTranslationSlots, setTotalTranslationSlots] = useState(0)
@@ -128,6 +137,10 @@ export function AdminTranslationPage() {
     setPendingJobs(data.pendingJobs)
     setTaskSummary(data.taskSummary)
     setRecentTasks(data.recentTasks)
+    setPublishedBlogs(data.publishedBlogs)
+    setSelectedBlogId(previous =>
+      previous || (data.publishedBlogs[0] != null ? String(data.publishedBlogs[0].id) : ''),
+    )
     setQueueWorkerRunning(data.queueWorkerRunning)
     setSkippedUpToDateCount(data.skippedUpToDateCount)
     setTotalTranslationSlots(data.totalTranslationSlots)
@@ -244,6 +257,39 @@ export function AdminTranslationPage() {
       })
     } finally {
       setIsControlling(false)
+    }
+  }
+
+  const retranslateOne = async () => {
+    const blogId = Number(selectedBlogId)
+
+    if (!Number.isInteger(blogId) || blogId <= 0) {
+      sileo.info({ title: '请选择要重新翻译的博客' })
+      return
+    }
+
+    setIsRetranslating(true)
+
+    try {
+      await retranslateBlogLanguage({
+        blogId,
+        language: selectedLanguage,
+      })
+      await loadState()
+
+      const blogTitle =
+        publishedBlogs.find(blog => blog.id === blogId)?.title ?? `#${blogId}`
+
+      sileo.success({
+        title: '已加入重新翻译队列',
+        description: `${blogTitle} · ${languageDisplayName[selectedLanguage]}`,
+      })
+    } catch (error) {
+      sileo.error({
+        title: error instanceof Error ? error.message : '重新翻译任务创建失败',
+      })
+    } finally {
+      setIsRetranslating(false)
     }
   }
 
@@ -408,6 +454,74 @@ export function AdminTranslationPage() {
 
       <section className="rounded-xl border bg-card p-5 shadow-xs">
         <div className="mb-4">
+          <h2 className="font-semibold text-lg">指定语言重新翻译</h2>
+          <p className="mt-1 text-muted-foreground text-sm">
+            以简体中文博客原文作为唯一基准，强制重新生成指定语言版本。中文原文中已有的英文技术词、产品名、缩写等默认保持英文，只有确有必要时才翻译。
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end">
+          <div className="grid gap-2">
+            <Label htmlFor="retranslate-blog">博客</Label>
+            <select
+              id="retranslate-blog"
+              value={selectedBlogId}
+              onChange={event => setSelectedBlogId(event.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+            >
+              {publishedBlogs.length === 0 ? (
+                <option value="">暂无已发布博客</option>
+              ) : (
+                publishedBlogs.map(blog => (
+                  <option key={blog.id} value={String(blog.id)}>
+                    #{blog.id} {blog.title}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="retranslate-language">目标语言</Label>
+            <select
+              id="retranslate-language"
+              value={selectedLanguage}
+              onChange={event =>
+                setSelectedLanguage(event.target.value as TranslationLanguage)
+              }
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+            >
+              {translationLanguages.map(language => (
+                <option key={language} value={language}>
+                  {languageDisplayName[language]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void retranslateOne()}
+            disabled={
+              isRetranslating ||
+              !enabled ||
+              !hasApiKey ||
+              selectedBlogId.length === 0
+            }
+          >
+            {isRetranslating ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <RefreshCcw className="size-4" />
+            )}
+            重新翻译
+          </Button>
+        </div>
+      </section>
+
+      <section className="rounded-xl border bg-card p-5 shadow-xs">
+        <div className="mb-4">
           <h2 className="font-semibold text-lg">翻译任务队列</h2>
           <p className="mt-1 text-muted-foreground text-sm">
             每 3 秒自动刷新。支持单个任务和选中任务的批量暂停、继续、取消；处理中任务会立即中断模型请求。
@@ -554,6 +668,11 @@ export function AdminTranslationPage() {
                       >
                         {taskStatusText[job.status]}
                       </span>
+                      {job.force ? (
+                        <span className="ml-1 inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-violet-600 text-xs dark:bg-violet-950/50 dark:text-violet-300">
+                          强制重译
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-2 font-mono">{job.attempts}</td>
                     <td className="whitespace-nowrap px-4 py-2 text-muted-foreground text-xs">

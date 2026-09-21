@@ -31,6 +31,7 @@ export async function BlogDetail({ slug, language }: { slug: string; language: L
           .select({
             title: blogTranslations.title,
             content: blogTranslations.content,
+            sourceUpdatedAt: blogTranslations.sourceUpdatedAt,
           })
           .from(blogTranslations)
           .where(
@@ -43,11 +44,15 @@ export async function BlogDetail({ slug, language }: { slug: string; language: L
           .then(rows => rows[0] ?? null)
 
   const { tagLinks, ...blog } = record
-  const localizedContent = translation?.content ?? blog.content
+  const isFreshTranslation =
+    translation != null &&
+    new Date(translation.sourceUpdatedAt).getTime() >= new Date(blog.updatedAt).getTime()
+  const localizedTranslation = isFreshTranslation ? translation : null
+  const localizedContent = localizedTranslation?.content ?? blog.content
   const sanitizedBlogHtml = await processor.process(localizedContent)
   const article = {
     ...blog,
-    title: translation?.title ?? blog.title,
+    title: localizedTranslation?.title ?? blog.title,
     content: sanitizedBlogHtml.toString(),
     tags: tagLinks.map(link => link.tag),
   }

@@ -57,6 +57,7 @@ function SessionAvatar({
           width={32}
           height={32}
           sizes="32px"
+          unoptimized
           onLoad={onLoad}
           className={cn(
             'size-full object-cover transition-[filter,opacity,transform] duration-500 ease-out',

@@ -60,8 +60,37 @@ function parseTranslatedResponse(text: string, fallbackTitle: string) {
   }
 }
 
-function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms))
+function throwIfAborted(signal?: AbortSignal) {
+  if (!signal?.aborted) return
+
+  if (signal.reason instanceof Error) {
+    throw signal.reason
+  }
+
+  throw new Error('Translation task was interrupted.')
+}
+
+function sleep(ms: number, signal?: AbortSignal) {
+  if (signal == null) {
+    return new Promise<void>(resolve => setTimeout(resolve, ms))
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    throwIfAborted(signal)
+
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+
+    const onAbort = () => {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', onAbort)
+      reject(signal.reason instanceof Error ? signal.reason : new Error('Translation task was interrupted.'))
+    }
+
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 function getRetryDelayMs(response: Response, attempt: number) {
@@ -84,20 +113,30 @@ function getRetryDelayMs(response: Response, attempt: number) {
   return 700 * 2 ** (attempt - 1)
 }
 
-async function fetchTranslationApi(url: string, init: RequestInit) {
+async function fetchTranslationApi(url: string, init: RequestInit, externalSignal?: AbortSignal) {
   const startedAt = Date.now()
   let lastError: unknown
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    throwIfAborted(externalSignal)
+
     const elapsed = Date.now() - startedAt
     const remainingBudget = TOTAL_REQUEST_BUDGET_MS - elapsed
 
     if (remainingBudget <= 2500) break
 
     try {
+      const timeoutSignal = AbortSignal.timeout(
+        Math.min(MAX_SINGLE_ATTEMPT_MS, remainingBudget),
+      )
+      const signal =
+        externalSignal == null
+          ? timeoutSignal
+          : AbortSignal.any([externalSignal, timeoutSignal])
+
       const response = await fetch(url, {
         ...init,
-        signal: AbortSignal.timeout(Math.min(MAX_SINGLE_ATTEMPT_MS, remainingBudget)),
+        signal,
       })
 
       if (!RETRYABLE_STATUS.has(response.status) || attempt === MAX_ATTEMPTS) {
@@ -112,8 +151,12 @@ async function fetchTranslationApi(url: string, init: RequestInit) {
       }
 
       await response.body?.cancel().catch(() => undefined)
-      await sleep(delayMs)
+      await sleep(delayMs, externalSignal)
     } catch (error) {
+      if (externalSignal?.aborted) {
+        throwIfAborted(externalSignal)
+      }
+
       lastError = error
 
       if (attempt === MAX_ATTEMPTS) break
@@ -123,7 +166,7 @@ async function fetchTranslationApi(url: string, init: RequestInit) {
 
       if (budgetAfterError <= delayMs + 2500) break
 
-      await sleep(delayMs)
+      await sleep(delayMs, externalSignal)
     }
   }
 
@@ -135,6 +178,7 @@ export async function translateMarkdown(input: {
   title: string
   content: string
   targetLanguage: TranslationLanguage
+  signal?: AbortSignal
 }): Promise<TranslationResult> {
   const config = await getTranslationModelConfig()
 
@@ -180,7 +224,7 @@ translated complete Markdown body`,
         },
       ],
     }),
-  })
+  }, input.signal)
 
   const json = (await response.json().catch(() => null)) as
     | {

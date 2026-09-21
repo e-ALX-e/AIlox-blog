@@ -159,7 +159,7 @@ export function HandwritingWordmark({
       mask={`url(#${maskId})`}
       fill="currentColor"
       stroke="currentColor"
-      strokeWidth={14}
+      strokeWidth={18}
       strokeLinecap="round"
       strokeLinejoin="round"
     >

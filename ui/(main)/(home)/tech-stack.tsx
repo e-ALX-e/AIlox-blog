@@ -92,20 +92,39 @@ function getFocusState(index: number, activeIndex: number | null) {
 export default function TechStack() {
   const translations = useTranslations()
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
+  const activeName = activeIndex == null ? '' : techStackData[activeIndex]?.name ?? ''
+  const activeLeft = activeIndex == null ? 12 : activeIndex * 34 + 12
 
   return (
     <motion.ul
       aria-label={translations.home.techStackLabel}
-      className="mt-[21px] grid grid-cols-7 gap-[10px]"
+      className="relative mt-[21px] grid grid-cols-7 gap-[10px]"
       variants={techStackVariants}
       onMouseLeave={() => {
         setActiveIndex(null)
       }}
     >
+      <motion.span
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-6 z-20 whitespace-nowrap font-mono text-[10px] text-black/65 tracking-wide dark:text-white/65"
+        style={{ x: '-50%' }}
+        animate={{
+          left: activeLeft,
+          opacity: activeIndex == null ? 0 : 1,
+          y: activeIndex == null ? 3 : 0,
+        }}
+        transition={{
+          left: { type: 'spring', stiffness: 430, damping: 32, mass: 0.55 },
+          opacity: { duration: 0.14 },
+          y: { duration: 0.18, ease: [0.16, 1, 0.3, 1] },
+        }}
+      >
+        {activeName}
+      </motion.span>
+
       {techStackData.map(({ Icon, name }, index) => (
         <motion.li
           key={name}
-          title={name}
           tabIndex={0}
           className="relative size-6 cursor-default rounded-md outline-none focus-visible:ring-2 focus-visible:ring-black/30 focus-visible:ring-offset-2 focus-visible:ring-offset-theme-background dark:focus-visible:ring-white/40"
           variants={techStackItemVariants}

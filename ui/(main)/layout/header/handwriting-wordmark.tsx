@@ -53,6 +53,7 @@ export function HandwritingWordmark({
 
   const dotDelay = strokeDelay + 0.03
   const ringDelay = dotDelay + 0.14
+  const finalLogoDelay = ringDelay + 0.3
 
   return (
     <motion.svg
@@ -167,6 +168,32 @@ export function HandwritingWordmark({
       <path d={AILOXI_DOT_FILL} fillRule="evenodd" />
       <path d={AILOXI_RING_FILL} fillRule="evenodd" />
     </g>
+
+      {/* The animated mask uses narrow reveal strokes to preserve handwriting order.
+          Once writing finishes, fade in an unmasked bold copy so the final logo
+          is visibly heavier instead of being limited by the mask width. */}
+      <motion.g
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth={72}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        initial={shouldReduceMotion ? false : { opacity: 0 }}
+        animate={
+          shouldReduceMotion || isVisible
+            ? { opacity: 1 }
+            : { opacity: 0 }
+        }
+        transition={{
+          delay: shouldReduceMotion ? 0 : finalLogoDelay,
+          duration: shouldReduceMotion ? 0 : 0.14,
+          ease: [0.16, 1, 0.3, 1],
+        }}
+      >
+        <path d={AILOXI_MAIN_FILL} fillRule="evenodd" />
+        <path d={AILOXI_DOT_FILL} fillRule="evenodd" />
+        <path d={AILOXI_RING_FILL} fillRule="evenodd" />
+      </motion.g>
     </motion.svg>
   )
 }

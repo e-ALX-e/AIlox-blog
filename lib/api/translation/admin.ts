@@ -54,6 +54,7 @@ export type TranslationAdminState = {
     upToDate: number
   }
   recentTasks: TranslationTaskRecord[]
+  queueWorkerRunning: boolean
   skippedUpToDateCount: number
   totalTranslationSlots: number
 }
@@ -100,5 +101,21 @@ export async function syncTranslation(params: {
     method: 'POST',
     json: params,
     timeout: 110_000,
+  })
+}
+
+
+export async function runTranslationQueue() {
+  return await apiRequest<{
+    message: string
+    queue: {
+      queued: number
+      alreadyProcessing: number
+      upToDate: number
+      total: number
+    }
+  }>({
+    url: 'admin/translation/run',
+    method: 'POST',
   })
 }

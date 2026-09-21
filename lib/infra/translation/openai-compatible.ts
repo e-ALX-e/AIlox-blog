@@ -400,7 +400,7 @@ async function translateChunk(input: {
       },
       body: JSON.stringify({
         model: input.model,
-        temperature: 0.2,
+        temperature: input.targetLanguage === 'zh-tw' ? 0 : 0.2,
         messages: [
           {
             role: 'system',
@@ -413,7 +413,7 @@ ${getLanguageSpecificRules(input.targetLanguage)}
 Rules:
 - The supplied Chinese title and Markdown are the canonical source of truth. Translate only from this Chinese source; never infer from an older translated version.
 - Preserve the Markdown structure exactly as much as possible.
-- Translate natural-language headings, paragraphs, table text, list text, blockquotes, and image alt text.
+- For zh-tw, apply the strict script-conversion rules above and do not paraphrase. For other target languages, translate natural-language headings, paragraphs, table text, list text, blockquotes, and image alt text.
 - English words or phrases already present in the Chinese source should normally remain exactly as written. This especially applies to technical terms, product names, proper nouns, acronyms, command names, library/framework names, and brand names such as Go, Python, Docker, Linux, GitLab, Runner, CI/CD, Cloudflare, API, OAuth, Markdown, PostgreSQL, MinIO, Next.js, and similar terms.
 - Only translate an English word that appears in the Chinese source when doing so is genuinely necessary for fluent comprehension in the target language and does not change its technical identity. When uncertain, keep the original English.
 - Do not translate inline code, shell commands, source code, environment variable names, identifiers, URLs, domains, IP addresses, file paths, or image URLs.

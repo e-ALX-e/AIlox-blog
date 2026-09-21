@@ -608,8 +608,9 @@ export function AdminTranslationPage() {
             onClick={() => void retranslateSelected()}
             disabled={
               isRetranslating ||
-              !enabled ||
               !hasApiKey ||
+              baseUrl.trim().length === 0 ||
+              model.trim().length === 0 ||
               selectedBlogIds.size === 0 ||
               selectedLanguages.size === 0
             }

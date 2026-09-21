@@ -106,7 +106,7 @@ export default function TechStack() {
     >
       <motion.span
         aria-hidden="true"
-        className="pointer-events-none absolute -top-6 z-20 whitespace-nowrap font-mono text-[10px] text-black/65 tracking-wide dark:text-white/65"
+        className="pointer-events-none absolute -top-9 z-30 overflow-hidden whitespace-nowrap rounded-full border border-white/30 bg-white/10 px-3 py-1.5 font-mono text-[10px] text-zinc-700 tracking-wide shadow-[0_10px_30px_rgba(15,23,42,0.12),inset_0_1px_0_rgba(255,255,255,0.62),inset_0_-1px_0_rgba(255,255,255,0.08)] ring-1 ring-black/[0.025] backdrop-blur-[24px] backdrop-saturate-200 before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-[radial-gradient(circle_at_24%_8%,rgba(255,255,255,0.5),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.16),rgba(255,255,255,0.03))] before:content-[''] after:pointer-events-none after:absolute after:inset-[1px] after:rounded-[inherit] after:border after:border-white/18 after:content-[''] dark:border-white/14 dark:bg-black/10 dark:text-zinc-100 dark:ring-white/[0.025] dark:shadow-[0_10px_34px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.14)] dark:before:bg-[radial-gradient(circle_at_24%_8%,rgba(255,255,255,0.14),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.01))] dark:after:border-white/7"
         style={{ x: '-50%' }}
         animate={{
           left: activeLeft,
@@ -115,11 +115,11 @@ export default function TechStack() {
         }}
         transition={{
           left: { type: 'spring', stiffness: 430, damping: 32, mass: 0.55 },
-          opacity: { duration: 0.14 },
-          y: { duration: 0.18, ease: [0.16, 1, 0.3, 1] },
+          opacity: { duration: 0.16 },
+          y: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
         }}
       >
-        {activeName}
+        <span className="relative z-10">{activeName}</span>
       </motion.span>
 
       {techStackData.map(({ Icon, name }, index) => (

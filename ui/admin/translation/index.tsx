@@ -85,7 +85,23 @@ export function AdminTranslationPage() {
     try {
       const response = await syncAllTranslations()
       setUsage(response.usage)
-      sileo.success({ title: '已重新翻译全部已发布文章' })
+
+      if (response.failures.length > 0) {
+        const preview = response.failures
+          .slice(0, 3)
+          .map(item => `#${item.blogId} ${item.language}: ${item.error}`)
+          .join('；')
+
+        sileo.error({
+          title: `翻译完成，但有 ${response.failures.length} 个失败`,
+          description: preview,
+        })
+      } else {
+        sileo.success({
+          title: '已重新翻译全部已发布文章',
+          description: `成功生成 ${response.translatedCount} 个语言版本`,
+        })
+      }
     } catch (error) {
       sileo.error({ title: error instanceof Error ? error.message : '翻译同步失败' })
     } finally {

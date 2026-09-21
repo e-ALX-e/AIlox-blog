@@ -41,9 +41,12 @@ export const GET = withResponse(async () => {
   try {
     await enqueuePendingTranslationTasks()
   } catch (error) {
-    if (hasPostgresErrorCode(error, '42P01')) {
+    if (
+      hasPostgresErrorCode(error, '42P01') ||
+      hasPostgresErrorCode(error, '42703')
+    ) {
       throw new BadRequestError(
-        '翻译任务表尚未创建。请在服务器执行 docker compose --profile tools run --rm db-init，然后重启 app。',
+        '翻译任务数据库结构尚未更新。请在服务器执行 docker compose --profile tools run --rm db-init，然后重启 app。',
       )
     }
 

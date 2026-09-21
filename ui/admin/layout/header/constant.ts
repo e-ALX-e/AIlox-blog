@@ -29,9 +29,4 @@ export const adminRoutes: { path: string; pathName: string; pattern: RegExp }[] 
     pathName: 'AI翻译',
     pattern: /^\/admin\/translation($|\/)/,
   },
-  {
-    path: '/admin/translation-rating',
-    pathName: '翻译评分',
-    pattern: /^\/admin\/translation-rating($|\/)/,
-  },
 ]

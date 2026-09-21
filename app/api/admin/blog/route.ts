@@ -6,7 +6,10 @@ import { db } from '@/db/instance'
 import { blogs, blogTags, blogToBlogTag, siteComments } from '@/db/schema'
 import { BadRequestError } from '@/lib/common/errors/request'
 import { noPermission } from '@/lib/core/auth/guard'
-import { syncBlogTranslations } from '@/lib/core/translation/sync-blog-translations'
+import {
+  enqueueBlogTranslationTasks,
+  startTranslationQueueWorker,
+} from '@/lib/core/translation/translation-queue'
 import { languages } from '@/lib/i18n/config'
 import { readJsonBody } from '@/lib/infra/http/read-json-body'
 import { withResponse } from '@/lib/infra/http/with-response'
@@ -55,16 +58,10 @@ function revalidateBlogPaths(...slugs: Array<string | undefined>) {
 function scheduleBlogTranslation(blogId: number, ...slugs: Array<string | undefined>) {
   after(async () => {
     try {
-      const result = await syncBlogTranslations(blogId)
-
-      if (result.failedLanguages.length > 0) {
-        console.error('[translation] automatic translation completed with failures', {
-          blogId,
-          failures: result.failedLanguages,
-        })
-      }
+      await enqueueBlogTranslationTasks(blogId)
+      await startTranslationQueueWorker()
     } catch (error) {
-      console.error('[translation] automatic translation failed', {
+      console.error('[translation] automatic translation queue failed', {
         blogId,
         error: error instanceof Error ? error.message : String(error),
       })

@@ -13,6 +13,12 @@ export async function generateMetadata({
   return seoMetadata[language].blog
 }
 
-export default function Page() {
-  return <BlogListPage />
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ language: string }>
+}) {
+  const language = getRouteLanguage((await params).language)
+
+  return <BlogListPage language={language} />
 }

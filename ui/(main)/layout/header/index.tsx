@@ -5,6 +5,7 @@ import { Languages } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { languageShortLabel } from '@/lib/i18n/config'
 import { getRoutePathname } from '@/lib/i18n/get-route-pathname'
 import { cn } from '@/lib/utils/common/shadcn'
 import { useHasCompletedHomeLoading, useHomeLoadingActions } from '@/store/use-home-loading-store'
@@ -73,7 +74,7 @@ export default function Header() {
   const { completeHomeLoading } = useHomeLoadingActions()
   const [hasEntered, setHasEntered] = useState(false)
   const [wordmarkAnimationKey, setWordmarkAnimationKey] = useState(0)
-  const { language, toggleLanguage } = useLanguage()
+  const { language, nextLanguage, toggleLanguage } = useLanguage()
   const translations = useTranslations()
   const languageOffset = language === 'en' ? '100%' : '-100%'
   const languagePathPrefix = `/${language}`
@@ -206,7 +207,7 @@ export default function Header() {
                             : { duration: 0.32, ease: [0.22, 1, 0.36, 1] }
                         }
                       >
-                        {translations.header.routes[route.pathName]}
+                        {isLanguageRoute ? languageShortLabel[nextLanguage] : translations.header.routes[route.pathName]}
                       </motion.span>
                     </AnimatePresence>
                   </span>

@@ -12,6 +12,7 @@ const LanguageContext = createContext<
       language: Language
       nextLanguage: Language
       isLanguageChanging: boolean
+      changeLanguage: (language: Language) => void
       toggleLanguage: () => void
     }
   | undefined
@@ -55,27 +56,31 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const language = isLanguageChanging ? targetLanguage : routeLanguage
   const languageIndex = languages.indexOf(language)
   const nextLanguage = languages[(languageIndex + 1) % languages.length]
-  const nextPathname = getLocalizedPathname(pathname, nextLanguage)
 
   useLayoutEffect(() => {
     document.documentElement.lang = languageHtmlLang[language]
     document.title = getDocumentTitle(pathname, language, document.title)
   }, [language, pathname])
 
-  const toggleLanguage = () => {
-    if (isLanguageChanging) return
+  const changeLanguage = (next: Language) => {
+    if (isLanguageChanging || next === language) return
 
     const url = new URL(window.location.href)
 
-    url.pathname = nextPathname
-    setTargetLanguage(nextLanguage)
+    url.pathname = getLocalizedPathname(pathname, next)
+    setTargetLanguage(next)
     window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+  }
+
+  const toggleLanguage = () => {
+    changeLanguage(nextLanguage)
   }
 
   const value = {
     language,
     nextLanguage,
     isLanguageChanging,
+    changeLanguage,
     toggleLanguage,
   }
 

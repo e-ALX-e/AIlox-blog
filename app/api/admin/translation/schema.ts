@@ -48,6 +48,6 @@ export const translationTaskActionSchema = z
 
 
 export const retranslateTranslationSchema = z.object({
-  blogId: z.coerce.number().int().positive(),
-  language: z.enum(translationLanguages),
+  blogIds: z.array(z.coerce.number().int().positive()).min(1).max(100),
+  languages: z.array(z.enum(translationLanguages)).min(1).max(translationLanguages.length),
 })

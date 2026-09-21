@@ -1,9 +1,19 @@
 'use client'
 
-import { Eye, EyeOff, Loader2, RefreshCcw, Save } from 'lucide-react'
+import {
+  Eye,
+  EyeOff,
+  Loader2,
+  Pause,
+  Play,
+  RefreshCcw,
+  Save,
+  XCircle,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { sileo } from 'sileo'
 import {
+  controlTranslationTasks,
   getTranslationAdminState,
   runTranslationQueue,
   type TranslationAdminState,
@@ -28,14 +38,18 @@ const emptyUsage: TranslationAdminState['usage'] = {
 const emptyTaskSummary: TranslationAdminState['taskSummary'] = {
   queued: 0,
   processing: 0,
+  paused: 0,
   failed: 0,
+  canceled: 0,
   upToDate: 0,
 }
 
 const taskStatusText: Record<string, string> = {
   queued: '待执行',
   processing: '处理中',
+  paused: '已暂停',
   failed: '失败',
+  canceled: '已取消',
   succeeded: '成功',
   skipped: '已跳过',
 }
@@ -43,7 +57,9 @@ const taskStatusText: Record<string, string> = {
 const taskStatusClassName: Record<string, string> = {
   queued: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
   processing: 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300',
+  paused: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
   failed: 'bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-300',
+  canceled: 'bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
   succeeded: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300',
   skipped: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
 }
@@ -61,10 +77,28 @@ function formatTaskTime(value: Date | string | null) {
   })
 }
 
+function canPause(job: TranslationJob) {
+  return job.status === 'queued' || job.status === 'processing'
+}
+
+function canResume(job: TranslationJob) {
+  return job.status === 'paused' || job.status === 'failed' || job.status === 'canceled'
+}
+
+function canCancel(job: TranslationJob) {
+  return (
+    job.status === 'queued' ||
+    job.status === 'processing' ||
+    job.status === 'paused' ||
+    job.status === 'failed'
+  )
+}
+
 export function AdminTranslationPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [isSyncing, setIsSyncing] = useState(false)
+  const [isStarting, setIsStarting] = useState(false)
+  const [isControlling, setIsControlling] = useState(false)
   const [enabled, setEnabled] = useState(false)
   const [baseUrl, setBaseUrl] = useState('')
   const [showBaseUrl, setShowBaseUrl] = useState(false)
@@ -78,8 +112,12 @@ export function AdminTranslationPage() {
   const [queueWorkerRunning, setQueueWorkerRunning] = useState(false)
   const [skippedUpToDateCount, setSkippedUpToDateCount] = useState(0)
   const [totalTranslationSlots, setTotalTranslationSlots] = useState(0)
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<number>>(new Set())
 
-  const runnableJobs = pendingJobs.filter(job => job.status !== 'processing')
+  const queuedJobs = pendingJobs.filter(job => job.status === 'queued')
+  const selectedJobs = pendingJobs.filter(job => selectedTaskIds.has(job.taskId))
+  const allSelected =
+    pendingJobs.length > 0 && selectedTaskIds.size === pendingJobs.length
 
   const applyState = (data: TranslationAdminState) => {
     setEnabled(data.config.enabled)
@@ -93,6 +131,12 @@ export function AdminTranslationPage() {
     setQueueWorkerRunning(data.queueWorkerRunning)
     setSkippedUpToDateCount(data.skippedUpToDateCount)
     setTotalTranslationSlots(data.totalTranslationSlots)
+
+    const availableIds = new Set(data.pendingJobs.map(job => job.taskId))
+    setSelectedTaskIds(previous => {
+      const next = new Set([...previous].filter(id => availableIds.has(id)))
+      return next
+    })
   }
 
   const loadState = async () => {
@@ -106,8 +150,7 @@ export function AdminTranslationPage() {
 
     void getTranslationAdminState()
       .then(data => {
-        if (!active) return
-        applyState(data)
+        if (active) applyState(data)
       })
       .catch(error => {
         sileo.error({ title: error instanceof Error ? error.message : '加载模型配置失败' })
@@ -123,10 +166,8 @@ export function AdminTranslationPage() {
         .then(data => {
           if (active) applyState(data)
         })
-        .catch(() => {
-          // Keep the current dashboard state when a background refresh fails.
-        })
-    }, 4000)
+        .catch(() => undefined)
+    }, 3000)
 
     return () => {
       active = false
@@ -155,40 +196,72 @@ export function AdminTranslationPage() {
     }
   }
 
-  const syncAll = async () => {
-    if (queueWorkerRunning || taskSummary.processing > 0) {
-      sileo.info({
-        title: '翻译队列正在运行',
-        description: '后台会继续处理剩余任务，可以离开此页面，无需重复提交。',
-      })
+  const startQueue = async () => {
+    if (queuedJobs.length === 0) {
+      sileo.info({ title: '当前没有待执行任务' })
       return
     }
 
-    if (runnableJobs.length === 0) {
-      sileo.success({
-        title: '所有翻译均为最新',
-        description: `已确认 ${skippedUpToDateCount} 个语言版本没有变化`,
-      })
-      return
-    }
-
-    setIsSyncing(true)
+    setIsStarting(true)
 
     try {
       const response = await runTranslationQueue()
       await loadState()
-
       sileo.success({
         title: '翻译队列已启动',
-        description: `新排队 ${response.queue.queued} 个，已是最新 ${response.queue.upToDate} 个。任务会在服务器后台串行执行。`,
+        description: `待执行 ${response.queue.queued} 个；后台会串行处理。`,
       })
     } catch (error) {
       sileo.error({
         title: error instanceof Error ? error.message : '启动翻译队列失败',
       })
     } finally {
-      setIsSyncing(false)
+      setIsStarting(false)
     }
+  }
+
+  const controlTasks = async (
+    action: 'pause' | 'resume' | 'cancel',
+    taskIds: number[],
+  ) => {
+    if (taskIds.length === 0) return
+
+    setIsControlling(true)
+
+    try {
+      const response = await controlTranslationTasks({ action, taskIds })
+      await loadState()
+
+      const actionLabel =
+        action === 'pause' ? '暂停' : action === 'resume' ? '继续' : '取消'
+
+      sileo.success({
+        title: `已${actionLabel} ${response.changedTaskIds.length} 个任务`,
+      })
+    } catch (error) {
+      sileo.error({
+        title: error instanceof Error ? error.message : '任务操作失败',
+      })
+    } finally {
+      setIsControlling(false)
+    }
+  }
+
+  const toggleTask = (taskId: number) => {
+    setSelectedTaskIds(previous => {
+      const next = new Set(previous)
+
+      if (next.has(taskId)) next.delete(taskId)
+      else next.add(taskId)
+
+      return next
+    })
+  }
+
+  const toggleAll = () => {
+    setSelectedTaskIds(
+      allSelected ? new Set() : new Set(pendingJobs.map(job => job.taskId)),
+    )
   }
 
   if (isLoading) {
@@ -205,7 +278,7 @@ export function AdminTranslationPage() {
       : 100
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 py-4 pb-12">
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 py-4 pb-12">
       <section className="rounded-xl border bg-card p-5 shadow-xs">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
@@ -288,40 +361,32 @@ export function AdminTranslationPage() {
           <Button
             type="button"
             variant="outline"
-            onClick={() => void syncAll()}
-            disabled={
-              isSyncing ||
-              !enabled ||
-              !hasApiKey ||
-              queueWorkerRunning ||
-              taskSummary.processing > 0 ||
-              runnableJobs.length === 0
-            }
+            onClick={() => void startQueue()}
+            disabled={isStarting || !enabled || !hasApiKey || queuedJobs.length === 0}
           >
-            {isSyncing || queueWorkerRunning || taskSummary.processing > 0 ? (
+            {isStarting ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
               <RefreshCcw className="size-4" />
             )}
-            {isSyncing
-              ? '正在启动队列...'
-              : queueWorkerRunning || taskSummary.processing > 0
-                ? `后台处理中（${taskSummary.processing}）`
-                : runnableJobs.length > 0
-                  ? `启动待更新队列（${runnableJobs.length}）`
-                  : '翻译已是最新'}
+            {queueWorkerRunning || taskSummary.processing > 0
+              ? `后台运行中 · 待执行 ${taskSummary.queued}`
+              : queuedJobs.length > 0
+                ? `启动待执行队列（${queuedJobs.length}）`
+                : '当前无待执行任务'}
           </Button>
         </div>
 
         <div className="mt-3 text-muted-foreground text-xs">
-          共 {totalTranslationSlots} 个语言版本 · 已是最新 {taskSummary.upToDate} 个 ·
-          待执行 {taskSummary.queued} 个 · 处理中 {taskSummary.processing} 个 · 失败 {taskSummary.failed} 个
+          共 {totalTranslationSlots} 个语言版本 · 已是最新 {taskSummary.upToDate} ·
+          待执行 {taskSummary.queued} · 处理中 {taskSummary.processing} ·
+          已暂停 {taskSummary.paused} · 失败 {taskSummary.failed} · 已取消 {taskSummary.canceled}
         </div>
 
         {queueWorkerRunning || taskSummary.processing > 0 ? (
           <div className="mt-4">
             <div className="mb-1 flex justify-between text-muted-foreground text-xs">
-              <span>服务器后台串行翻译中，可以安全离开页面；临时 5xx / 429 会自动重试</span>
+              <span>服务器后台串行翻译中，可以离开页面；任务可随时暂停或取消</span>
               <span>{progressPercent}%</span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -338,45 +403,141 @@ export function AdminTranslationPage() {
         <div className="mb-4">
           <h2 className="font-semibold text-lg">翻译任务队列</h2>
           <p className="mt-1 text-muted-foreground text-sm">
-            每 4 秒自动刷新。队列在服务器后台执行，即使离开页面也会继续；运行期间会锁定按钮，避免重复请求。
+            每 3 秒自动刷新。支持单个任务和选中任务的批量暂停、继续、取消；处理中任务会立即中断模型请求。
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <StatCard label="待执行" value={taskSummary.queued.toLocaleString()} />
           <StatCard label="处理中" value={taskSummary.processing.toLocaleString()} />
+          <StatCard label="已暂停" value={taskSummary.paused.toLocaleString()} />
           <StatCard label="失败" value={taskSummary.failed.toLocaleString()} />
+          <StatCard label="已取消" value={taskSummary.canceled.toLocaleString()} />
           <StatCard label="已是最新" value={taskSummary.upToDate.toLocaleString()} />
         </div>
 
-        <div className="mt-5 overflow-hidden rounded-lg border">
-          <table className="w-full text-left text-sm">
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={toggleAll}
+            disabled={pendingJobs.length === 0}
+          >
+            {allSelected ? '取消全选' : '全选待处理'}
+          </Button>
+
+          <span className="mr-2 text-muted-foreground text-xs">
+            已选 {selectedJobs.length} 个
+          </span>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={
+              isControlling ||
+              !selectedJobs.some(canPause)
+            }
+            onClick={() =>
+              void controlTasks(
+                'pause',
+                selectedJobs.filter(canPause).map(job => job.taskId),
+              )
+            }
+          >
+            <Pause className="size-4" />
+            批量暂停
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={
+              isControlling ||
+              !selectedJobs.some(canResume)
+            }
+            onClick={() =>
+              void controlTasks(
+                'resume',
+                selectedJobs.filter(canResume).map(job => job.taskId),
+              )
+            }
+          >
+            <Play className="size-4" />
+            批量继续
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={
+              isControlling ||
+              !selectedJobs.some(canCancel)
+            }
+            onClick={() =>
+              void controlTasks(
+                'cancel',
+                selectedJobs.filter(canCancel).map(job => job.taskId),
+              )
+            }
+          >
+            <XCircle className="size-4" />
+            批量取消
+          </Button>
+        </div>
+
+        <div className="mt-4 overflow-x-auto rounded-lg border">
+          <table className="w-full min-w-[1050px] text-left text-sm">
             <thead className="bg-muted/50">
               <tr>
+                <th className="w-10 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    aria-label="选择全部待处理任务"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="size-4 accent-black dark:accent-white"
+                  />
+                </th>
                 <th className="px-4 py-2 font-medium">文章</th>
                 <th className="px-4 py-2 font-medium">语言</th>
                 <th className="px-4 py-2 font-medium">状态</th>
                 <th className="px-4 py-2 font-medium">尝试</th>
                 <th className="px-4 py-2 font-medium">最近更新</th>
                 <th className="px-4 py-2 font-medium">错误</th>
+                <th className="px-4 py-2 font-medium">操作</th>
               </tr>
             </thead>
             <tbody>
               {pendingJobs.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-6 text-center text-muted-foreground" colSpan={6}>
+                  <td className="px-4 py-6 text-center text-muted-foreground" colSpan={8}>
                     当前没有待处理任务，所有语言版本都已是最新。
                   </td>
                 </tr>
               ) : (
                 pendingJobs.map(job => (
-                  <tr key={`${job.blogId}:${job.language}`} className="border-t align-top">
+                  <tr key={job.taskId} className="border-t align-top">
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`选择任务 #${job.taskId}`}
+                        checked={selectedTaskIds.has(job.taskId)}
+                        onChange={() => toggleTask(job.taskId)}
+                        className="size-4 accent-black dark:accent-white"
+                      />
+                    </td>
                     <td className="max-w-64 px-4 py-2">
                       <span className="block truncate" title={job.blogTitle}>
                         #{job.blogId} {job.blogTitle}
                       </span>
                     </td>
-                    <td className="px-4 py-2">{languageDisplayName[job.language]}</td>
+                    <td className="whitespace-nowrap px-4 py-2">
+                      {languageDisplayName[job.language]}
+                    </td>
                     <td className="px-4 py-2">
                       <span
                         className={cn(
@@ -391,10 +552,52 @@ export function AdminTranslationPage() {
                     <td className="whitespace-nowrap px-4 py-2 text-muted-foreground text-xs">
                       {formatTaskTime(job.updatedAt)}
                     </td>
-                    <td className="max-w-80 px-4 py-2 text-red-500 text-xs">
+                    <td className="max-w-72 px-4 py-2 text-red-500 text-xs">
                       <span className="block line-clamp-2" title={job.error ?? ''}>
                         {job.error ?? '-'}
                       </span>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2">
+                      <div className="flex gap-1">
+                        {canPause(job) ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={isControlling}
+                            onClick={() => void controlTasks('pause', [job.taskId])}
+                          >
+                            <Pause className="size-3.5" />
+                            暂停
+                          </Button>
+                        ) : null}
+
+                        {canResume(job) ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={isControlling}
+                            onClick={() => void controlTasks('resume', [job.taskId])}
+                          >
+                            <Play className="size-3.5" />
+                            继续
+                          </Button>
+                        ) : null}
+
+                        {canCancel(job) ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={isControlling}
+                            onClick={() => void controlTasks('cancel', [job.taskId])}
+                          >
+                            <XCircle className="size-3.5" />
+                            取消
+                          </Button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -437,7 +640,7 @@ export function AdminTranslationPage() {
         <div className="mb-4">
           <h2 className="font-semibold text-lg">Token 消耗统计</h2>
           <p className="mt-1 text-muted-foreground text-sm">
-            每次自动翻译完成后记录模型返回的 prompt / completion / total token。
+            每次自动翻译成功后记录模型返回的 prompt / completion / total token。
           </p>
         </div>
 

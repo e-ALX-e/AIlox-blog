@@ -17,6 +17,11 @@ export type TranslationResult = {
   usage: Usage
 }
 
+const MAX_ATTEMPTS = 3
+const TOTAL_REQUEST_BUDGET_MS = 95_000
+const MAX_SINGLE_ATTEMPT_MS = 60_000
+const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 523, 524])
+
 function getChatCompletionsUrl(baseUrl: string) {
   const normalized = baseUrl.replace(/\/+$/, '')
 
@@ -55,6 +60,77 @@ function parseTranslatedResponse(text: string, fallbackTitle: string) {
   }
 }
 
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function getRetryDelayMs(response: Response, attempt: number) {
+  const retryAfter = response.headers.get('retry-after')
+
+  if (retryAfter != null) {
+    const seconds = Number(retryAfter)
+
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      return Math.min(seconds * 1000, 5000)
+    }
+
+    const retryAt = Date.parse(retryAfter)
+
+    if (Number.isFinite(retryAt)) {
+      return Math.min(Math.max(retryAt - Date.now(), 0), 5000)
+    }
+  }
+
+  return 700 * 2 ** (attempt - 1)
+}
+
+async function fetchTranslationApi(url: string, init: RequestInit) {
+  const startedAt = Date.now()
+  let lastError: unknown
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const elapsed = Date.now() - startedAt
+    const remainingBudget = TOTAL_REQUEST_BUDGET_MS - elapsed
+
+    if (remainingBudget <= 2500) break
+
+    try {
+      const response = await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(Math.min(MAX_SINGLE_ATTEMPT_MS, remainingBudget)),
+      })
+
+      if (!RETRYABLE_STATUS.has(response.status) || attempt === MAX_ATTEMPTS) {
+        return response
+      }
+
+      const delayMs = getRetryDelayMs(response, attempt)
+      const budgetAfterResponse = TOTAL_REQUEST_BUDGET_MS - (Date.now() - startedAt)
+
+      if (budgetAfterResponse <= delayMs + 2500) {
+        return response
+      }
+
+      await response.body?.cancel().catch(() => undefined)
+      await sleep(delayMs)
+    } catch (error) {
+      lastError = error
+
+      if (attempt === MAX_ATTEMPTS) break
+
+      const delayMs = 700 * 2 ** (attempt - 1)
+      const budgetAfterError = TOTAL_REQUEST_BUDGET_MS - (Date.now() - startedAt)
+
+      if (budgetAfterError <= delayMs + 2500) break
+
+      await sleep(delayMs)
+    }
+  }
+
+  const reason = lastError instanceof Error ? lastError.message : String(lastError ?? 'timeout')
+  throw new Error(`Translation API connection failed after retries: ${reason}`)
+}
+
 export async function translateMarkdown(input: {
   title: string
   content: string
@@ -72,11 +148,12 @@ export async function translateMarkdown(input: {
   }
 
   const targetLanguageName = translationLanguageName[input.targetLanguage]
-  const response = await fetch(getChatCompletionsUrl(config.baseUrl), {
+  const response = await fetchTranslationApi(getChatCompletionsUrl(config.baseUrl), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey}`,
+      Connection: 'keep-alive',
     },
     body: JSON.stringify({
       model: config.model,
@@ -104,7 +181,6 @@ translated complete Markdown body`,
         },
       ],
     }),
-    signal: AbortSignal.timeout(100_000),
   })
 
   const json = (await response.json().catch(() => null)) as
@@ -118,11 +194,16 @@ translated complete Markdown body`,
           output_tokens?: number
         }
         error?: { message?: string }
+        message?: string
       }
     | null
 
   if (!response.ok) {
-    throw new Error(json?.error?.message || `Translation API request failed: ${response.status}`)
+    throw new Error(
+      json?.error?.message ||
+        json?.message ||
+        `Translation API request failed: ${response.status}`,
+    )
   }
 
   const translatedText = json?.choices?.[0]?.message?.content?.trim()

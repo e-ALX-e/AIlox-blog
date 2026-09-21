@@ -1,14 +1,15 @@
+import type { Language } from '@/lib/i18n/config'
 import { and, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { db } from '@/db/instance'
-import { blogs } from '@/db/schema'
+import { blogs, blogTranslations } from '@/db/schema'
 import { processor } from '@/lib/core/markdown/processor'
 import ArticleDisplayPage from '@/ui/(main)/blog/article-display-page'
 import DeferredCommentCard from '@/ui/(main)/blog/comment-card/deferred-comment-card'
 import HorizontalDividingLine from '@/ui/components/shared/horizontal-dividing-line'
 import { MainScrollBlur } from '@/ui/components/shared/main-scroll-blur'
 
-export async function BlogDetail({ slug }: { slug: string }) {
+export async function BlogDetail({ slug, language }: { slug: string; language: Language }) {
   const record = await db.query.blogs.findFirst({
     where: and(eq(blogs.slug, slug), eq(blogs.isPublished, true)),
     with: {
@@ -23,10 +24,30 @@ export async function BlogDetail({ slug }: { slug: string }) {
 
   if (record == null || record.content.length === 0) notFound()
 
+  const translation =
+    language === 'zh'
+      ? null
+      : await db
+          .select({
+            title: blogTranslations.title,
+            content: blogTranslations.content,
+          })
+          .from(blogTranslations)
+          .where(
+            and(
+              eq(blogTranslations.blogId, record.id),
+              eq(blogTranslations.language, language),
+            ),
+          )
+          .limit(1)
+          .then(rows => rows[0] ?? null)
+
   const { tagLinks, ...blog } = record
-  const sanitizedBlogHtml = await processor.process(blog.content)
+  const localizedContent = translation?.content ?? blog.content
+  const sanitizedBlogHtml = await processor.process(localizedContent)
   const article = {
     ...blog,
+    title: translation?.title ?? blog.title,
     content: sanitizedBlogHtml.toString(),
     tags: tagLinks.map(link => link.tag),
   }

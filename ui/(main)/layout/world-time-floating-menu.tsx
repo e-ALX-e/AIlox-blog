@@ -213,7 +213,7 @@ export const WorldTimeFloatingMenu: FC<HTMLMotionProps<'div'>> = ({
             onDragEnd?.(event, info)
           }}
           className={cn(
-            'fixed bottom-[100px] left-[calc(50%+64px)] z-100 -ml-6 size-12 touch-none select-none',
+            'fixed right-6 bottom-[92px] z-100 size-12 touch-none select-none sm:right-10 md:right-[72px]',
             !isOpen && 'cursor-grab active:cursor-grabbing',
             className,
           )}

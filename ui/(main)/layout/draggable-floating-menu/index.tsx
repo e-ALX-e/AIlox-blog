@@ -1,7 +1,7 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, Globe2, X } from 'lucide-react'
-import { AnimatePresence, type HTMLMotionProps, motion } from 'motion/react'
+import { ChevronLeft, ChevronRight, Globe2, Layers, Sparkles, X } from 'lucide-react'
+import { AnimatePresence, type HTMLMotionProps, motion, useReducedMotion } from 'motion/react'
 import { useTheme } from 'next-themes'
 import { type FC, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
@@ -23,6 +23,8 @@ import { VolumeIcon } from '@/ui/shadcn/volume'
 import { VolumeOffIcon } from '@/ui/shadcn/volume-off'
 import { FloatingMenuActionButton } from './floating-menu-action-button'
 import { SkyBackgroundControls } from './sky-background-controls'
+import styles from './panel.module.css'
+import { usePanelStyle } from './use-panel-style'
 
 const subscribePortal = (onStoreChange: () => void) => {
   const frame = requestAnimationFrame(onStoreChange)
@@ -41,6 +43,9 @@ const worldTimeCopy: Record<
     china: string
     previous: string
     next: string
+    panelStyle: string
+    standard: string
+    liquidGlass: string
   }
 > = {
   zh: {
@@ -50,6 +55,9 @@ const worldTimeCopy: Record<
     china: '中国',
     previous: '上一页',
     next: '下一页',
+    panelStyle: '面板风格',
+    standard: '标准',
+    liquidGlass: '液态玻璃',
   },
   en: {
     title: 'World Time',
@@ -58,6 +66,9 @@ const worldTimeCopy: Record<
     china: 'China',
     previous: 'Previous page',
     next: 'Next page',
+    panelStyle: 'Panel style',
+    standard: 'Standard',
+    liquidGlass: 'Liquid Glass',
   },
   'zh-tw': {
     title: '全球時間',
@@ -66,6 +77,9 @@ const worldTimeCopy: Record<
     china: '中國',
     previous: '上一頁',
     next: '下一頁',
+    panelStyle: '面板風格',
+    standard: '標準',
+    liquidGlass: '液態玻璃',
   },
   ja: {
     title: '世界時計',
@@ -74,6 +88,9 @@ const worldTimeCopy: Record<
     china: '中国',
     previous: '前のページ',
     next: '次のページ',
+    panelStyle: 'パネルのスタイル',
+    standard: '標準',
+    liquidGlass: 'リキッドガラス',
   },
   ru: {
     title: 'Мировое время',
@@ -82,6 +99,9 @@ const worldTimeCopy: Record<
     china: 'Китай',
     previous: 'Предыдущая страница',
     next: 'Следующая страница',
+    panelStyle: 'Стиль панели',
+    standard: 'Обычный',
+    liquidGlass: 'Liquid Glass',
   },
   de: {
     title: 'Weltzeit',
@@ -90,6 +110,9 @@ const worldTimeCopy: Record<
     china: 'China',
     previous: 'Vorherige Seite',
     next: 'Nächste Seite',
+    panelStyle: 'Panel-Stil',
+    standard: 'Standard',
+    liquidGlass: 'Liquid Glass',
   },
 }
 
@@ -134,7 +157,12 @@ function WorldTimeRow({
   timeZone: string
 }) {
   return (
-    <div className="rounded-xl border border-border/60 bg-foreground/[0.025] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] dark:border-white/10 dark:bg-white/[0.045]">
+    <div
+      className={cn(
+        styles.clockCard,
+        'rounded-xl border border-border/60 bg-foreground/[0.025] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] dark:border-white/10 dark:bg-white/[0.045]',
+      )}
+    >
       <div className="mb-1.5 flex items-center justify-between gap-3">
         <span className="font-medium text-sm">{label}</span>
         <span className="shrink-0 font-mono text-[10px] text-foreground/45">
@@ -166,6 +194,8 @@ export const DraggableFloatingMenu: FC<HTMLMotionProps<'div'>> = ({
   const worldTime = worldTimeCopy[language]
   const locale = languageHtmlLang[language]
   const { setTheme, resolvedTheme } = useTheme()
+  const [panelStyle, setPanelStyle] = usePanelStyle()
+  const reduceMotion = useReducedMotion()
 
   const isPlaying = useIsPlaying()
   const { play, pause } = useBackgroundMusicActions()
@@ -180,12 +210,17 @@ export const DraggableFloatingMenu: FC<HTMLMotionProps<'div'>> = ({
   const portal = useSyncExternalStore(subscribePortal, getPortalSnapshot, getServerPortalSnapshot)
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setNow(new Date())
-    }, 1000)
+    if (!isOpen || page !== 1) return
 
-    return () => window.clearInterval(timer)
-  }, [])
+    const update = () => setNow(new Date())
+    const frame = window.requestAnimationFrame(update)
+    const timer = window.setInterval(update, 1000)
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearInterval(timer)
+    }
+  }, [isOpen, page])
 
   const playSoundEffect = () => {
     playClickSoft()
@@ -277,9 +312,10 @@ export const DraggableFloatingMenu: FC<HTMLMotionProps<'div'>> = ({
           side="top"
           sideOffset={12}
           animation="fade"
-          className="max-h-[min(38rem,calc(100dvh-7rem))] w-[min(19rem,calc(100vw-2rem))] overflow-hidden rounded-lg border-border/60 bg-background p-2 shadow-lg dark:border-white/12 dark:bg-zinc-950 dark:shadow-[0_20px_48px_rgba(0,0,0,0.38)]"
+          data-surface={panelStyle}
+          className={styles.panel}
         >
-          <div className="flex h-9 items-center justify-between gap-2 px-2">
+          <div className={cn(styles.header, 'flex h-9 items-center justify-between gap-2 px-2')}>
             <div className="flex min-w-0 items-center gap-2">
               {page === 1 ? (
                 <Globe2 aria-hidden className="size-4 shrink-0 text-violet-500 dark:text-violet-300" />
@@ -319,16 +355,37 @@ export const DraggableFloatingMenu: FC<HTMLMotionProps<'div'>> = ({
             </div>
           </div>
 
-          <div className="relative min-h-[13rem] overflow-hidden">
+          <div role="group" aria-label={worldTime.panelStyle} className={styles.styleBar}>
+            <button
+              type="button"
+              aria-pressed={panelStyle === 'standard'}
+              onClick={() => setPanelStyle('standard')}
+              className={styles.styleButton}
+            >
+              <Layers aria-hidden className="size-3.5 shrink-0" />
+              <span className="truncate">{worldTime.standard}</span>
+            </button>
+            <button
+              type="button"
+              aria-pressed={panelStyle === 'glass'}
+              onClick={() => setPanelStyle('glass')}
+              className={styles.styleButton}
+            >
+              <Sparkles aria-hidden className="size-3.5 shrink-0" />
+              <span className="truncate">{worldTime.liquidGlass}</span>
+            </button>
+          </div>
+
+          <div className={styles.viewport}>
             <AnimatePresence initial={false} mode="wait">
               {page === 0 ? (
                 <motion.div
                   key="quick-settings"
-                  initial={{ opacity: 0, x: -12 }}
+                  initial={{ opacity: 0, x: reduceMotion ? 0 : -12 }}
                   animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -12 }}
-                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                  className="divide-y divide-border/60"
+                  exit={{ opacity: 0, x: reduceMotion ? 0 : -12 }}
+                  transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
+                  className={cn(styles.page, 'divide-y divide-border/60')}
                 >
                   <div className="flex min-h-12 items-center justify-between gap-4 px-2 py-2">
                     <div className="flex min-w-0 items-center gap-2.5">
@@ -401,11 +458,11 @@ export const DraggableFloatingMenu: FC<HTMLMotionProps<'div'>> = ({
               ) : (
                 <motion.div
                   key="world-time"
-                  initial={{ opacity: 0, x: 12 }}
+                  initial={{ opacity: 0, x: reduceMotion ? 0 : 12 }}
                   animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 12 }}
-                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                  className="grid gap-2 px-1 py-1"
+                  exit={{ opacity: 0, x: reduceMotion ? 0 : 12 }}
+                  transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
+                  className={cn(styles.page, styles.clockPage, 'grid gap-3 px-1 py-3')}
                 >
                   <div className="px-2 pb-1 text-[10px] text-foreground/45">
                     {worldTime.subtitle}
@@ -427,27 +484,37 @@ export const DraggableFloatingMenu: FC<HTMLMotionProps<'div'>> = ({
             </AnimatePresence>
           </div>
 
-          <div className="flex h-7 items-center justify-center gap-1.5">
+          <div className={cn(styles.footer, 'flex h-8 items-center justify-center gap-1')}>
             <button
               type="button"
               aria-label={translations.common.quickSettings}
               aria-current={page === 0 ? 'page' : undefined}
               onClick={() => setPage(0)}
-              className={cn(
-                'h-1.5 rounded-full transition-all',
-                page === 0 ? 'w-5 bg-foreground/65' : 'w-1.5 bg-foreground/20 hover:bg-foreground/35',
-              )}
-            />
+              className="flex size-7 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-theme-ring"
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  'h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none',
+                  page === 0 ? 'w-5 bg-foreground/65' : 'w-1.5 bg-foreground/20',
+                )}
+              />
+            </button>
             <button
               type="button"
               aria-label={worldTime.title}
               aria-current={page === 1 ? 'page' : undefined}
               onClick={() => setPage(1)}
-              className={cn(
-                'h-1.5 rounded-full transition-all',
-                page === 1 ? 'w-5 bg-violet-500/75' : 'w-1.5 bg-foreground/20 hover:bg-foreground/35',
-              )}
-            />
+              className="flex size-7 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-theme-ring"
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  'h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none',
+                  page === 1 ? 'w-5 bg-violet-500/75' : 'w-1.5 bg-foreground/20',
+                )}
+              />
+            </button>
           </div>
         </PopoverContent>
       </Popover>

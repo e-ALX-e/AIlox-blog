@@ -4,7 +4,6 @@ import { useIsBackgroundOnly } from '@/store/use-sky-background-store'
 import { Background } from './background'
 import { SkyBackgroundSync } from './background/sky-background-sync'
 import { DraggableFloatingMenu } from './draggable-floating-menu'
-import { WorldTimeFloatingMenu } from './world-time-floating-menu'
 
 export function MainStage({ children }: { children: React.ReactNode }) {
   const isBackgroundOnly = useIsBackgroundOnly()
@@ -18,7 +17,6 @@ export function MainStage({ children }: { children: React.ReactNode }) {
       {children}
       <Background />
       <DraggableFloatingMenu />
-      <WorldTimeFloatingMenu />
     </div>
   )
 }

@@ -116,18 +116,18 @@ export const DraggableFloatingMenu: FC<HTMLMotionProps<'div'>> = ({
                 aria-label={
                   isOpen ? translations.common.closeQuickMenu : translations.common.openQuickMenu
                 }
-                className="size-12 cursor-pointer overflow-hidden border-white/70 p-0 shadow-[0_8px_20px_color-mix(in_srgb,var(--theme-accent)_35%,transparent)] dark:border-white/30 dark:shadow-[0_0_16px_rgba(255,255,255,0.14),0_10px_24px_rgba(0,0,0,0.42)]"
+                className="size-12 cursor-pointer overflow-hidden border-sky-200/75 p-0 shadow-[0_8px_22px_rgba(59,130,246,0.32)] dark:border-sky-200/30 dark:shadow-[0_0_18px_rgba(96,165,250,0.2),0_10px_24px_rgba(0,0,0,0.42)]"
               />
             }
           >
             <FluidOrb
               size={48}
-              color="var(--theme-accent)"
+              color="#3b82f6"
               animationPulse={orbAnimationPulse}
               isAnimating={isDragging}
               aria-hidden
             />
-            <span className="absolute top-0 left-0 size-full animate-ye-ping-one-dot-one rounded-full ring-2 ring-theme-ring ring-offset-1 ring-offset-background dark:ring-white/65 dark:ring-offset-zinc-950" />
+            <span className="absolute top-0 left-0 size-full animate-ye-ping-one-dot-one rounded-full ring-2 ring-sky-400/75 ring-offset-1 ring-offset-background dark:ring-sky-300/70 dark:ring-offset-zinc-950" />
           </PopoverTrigger>
         </motion.div>
 

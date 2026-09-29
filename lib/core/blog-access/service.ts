@@ -20,8 +20,14 @@ export async function canReadArticle(blogId: number): Promise<boolean> {
   if (access == null) return true
   // This affects public article/JSON/comment reads only, not the admin editor.
   if (access.adminBypass === true && !(await noPermission())) return true
-  const token = (await cookies()).get(articleCookieName(blogId))?.value
-  return verifyArticleGrant(token, blogId, access.codeHash, serverEnv.BETTER_AUTH_SECRET)
+  const jar = await cookies()
+  if (verifyArticleGrant(jar.get(articleCookieName(blogId))?.value, blogId,
+    access.codeHash, serverEnv.BETTER_AUTH_SECRET)) return true
+  const shareToken = jar.get(`ailoxi-share-${blogId}`)?.value
+  if (!shareToken?.startsWith('sg1.')) return false
+  // Load share storage only for share sessions, not every ordinary article read.
+  const { canReadSharedArticle } = await import('./share-service')
+  return canReadSharedArticle(shareToken, blogId, access.codeHash)
 }
 
 export async function takeUnlockAttempt(blogId: number): Promise<boolean> {

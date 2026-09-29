@@ -2,16 +2,16 @@
 
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useEffect } from 'react'
-import { readArticleCodeLink } from '@/lib/core/blog-access/share-link'
+import { readArticleAccessLink } from '@/lib/core/blog-access/share-link'
 
-/** Authorized/public pages also remove a supplied phrase; no redundant unlock is needed. */
+/** Already authorized/public pages scrub capability URLs too; no redundant grant is needed. */
 export function ArticleAccessLinkCleanup() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   useEffect(() => {
     const clean = () => {
-      const supplied = readArticleCodeLink(window.location.href)
-      if (supplied != null) window.history.replaceState(null, '', supplied.cleanUrl)
+      const supplied = readArticleAccessLink(window.location.href)
+      if (supplied != null) window.history.replaceState(window.history.state, '', supplied.cleanUrl)
     }
     clean()
     window.addEventListener('hashchange', clean)

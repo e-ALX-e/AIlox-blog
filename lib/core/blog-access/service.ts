@@ -18,8 +18,8 @@ export async function readArticleAccess(blogId: number) {
 export async function canReadArticle(blogId: number): Promise<boolean> {
   const access = await readArticleAccess(blogId)
   if (access == null) return true
-  // Administrators may review/edit protected articles without unlocking each one.
-  if (!(await noPermission())) return true
+  // This affects public article/JSON/comment reads only, not the admin editor.
+  if (access.adminBypass === true && !(await noPermission())) return true
   const token = (await cookies()).get(articleCookieName(blogId))?.value
   return verifyArticleGrant(token, blogId, access.codeHash, serverEnv.BETTER_AUTH_SECRET)
 }

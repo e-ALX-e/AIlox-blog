@@ -5,6 +5,7 @@ import { db } from '@/db/instance'
 import { blogs, blogTranslations } from '@/db/schema'
 import { canReadArticle } from '@/lib/core/blog-access/service'
 import { processor } from '@/lib/core/markdown/processor'
+import { ArticleAccessLinkCleanup } from '@/ui/(main)/blog/article-access-link-cleanup'
 import { ArticleCodeGate } from '@/ui/(main)/blog/article-code-gate'
 import ArticleDisplayPage from '@/ui/(main)/blog/article-display-page'
 import DeferredCommentCard from '@/ui/(main)/blog/comment-card/deferred-comment-card'
@@ -45,6 +46,7 @@ export async function BlogDetail({ slug, language }: { slug: string; language: L
 
   return (
     <div className="flex flex-col gap-4">
+      <ArticleAccessLinkCleanup />
       <ArticleDisplayPage createdAt={record.createdAt} sanitizedContent={sanitizedBlogHtml.toString()} tags={tagNames} />
       <HorizontalDividingLine />
       <DeferredCommentCard articleId={record.id} />

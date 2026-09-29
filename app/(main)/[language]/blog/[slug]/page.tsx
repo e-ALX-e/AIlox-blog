@@ -34,6 +34,7 @@ export async function generateMetadata({ params }: {
   const title = translatedTitle ?? blog.title
   return {
     title,
+    referrer: 'no-referrer',
     description: seoMetadata[language].articleDescription(title),
     alternates: {
       canonical: `/${language}/blog/${slug}`,

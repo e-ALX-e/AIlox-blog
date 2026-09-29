@@ -1,4 +1,4 @@
-import { integer, pgTable, text } from 'drizzle-orm/pg-core'
+import { boolean, integer, pgTable, text } from 'drizzle-orm/pg-core'
 import { dateTime } from '../columns'
 import { blogs } from './blog'
 
@@ -6,6 +6,8 @@ import { blogs } from './blog'
 export const blogAccess = pgTable('BlogAccess', {
   blogId: integer('blogId').primaryKey().references(() => blogs.id, { onDelete: 'cascade' }),
   codeHash: text('codeHash').notNull(),
+  // Explicit per-article opt-in. A missing/false value must never bypass the gate.
+  adminBypass: boolean('adminBypass').notNull().default(false),
   updatedAt: dateTime('updatedAt').defaultNow().notNull(),
 })
 

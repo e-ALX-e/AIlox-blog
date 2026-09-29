@@ -1,7 +1,8 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { readArticleCodeLink } from '@/lib/core/blog-access/share-link'
 import type { Language } from '@/lib/i18n/config'
 
 const copy: Record<Language, { prompt: string; label: string; submit: string; loading: string; wrong: string; wait: string; error: string }> = {
@@ -16,35 +17,74 @@ const copy: Record<Language, { prompt: string; label: string; submit: string; lo
 export function ArticleCodeGate({ slug, title, language }: { slug: string; title: string; language: Language }) {
   const text = copy[language]
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [code, setCode] = useState('')
   const [pending, setPending] = useState(false)
   const [message, setMessage] = useState('')
+  const busy = useRef(false)
+  const mounted = useRef(false)
+
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
+
+  const unlock = useCallback(async (candidate: string | null) => {
+    if (busy.current) return
+    if (candidate == null || candidate.trim().length < 4 || candidate.length > 128) {
+      setMessage(text.wrong)
+      return
+    }
+    busy.current = true
+    setPending(true)
+    setMessage('')
+    const pathname = window.location.pathname
+    try {
+      const response = await fetch(`/api/blog/${encodeURIComponent(slug)}/unlock`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: candidate }), cache: 'no-store', credentials: 'same-origin',
+      })
+      if (!mounted.current || window.location.pathname !== pathname) return
+      if (!response.ok) {
+        setMessage(response.status === 429 ? text.wait : response.status === 403 ? text.wrong : text.error)
+        return
+      }
+      setCode('')
+      router.refresh()
+    } catch {
+      if (mounted.current) setMessage(text.error)
+    } finally {
+      busy.current = false
+      if (mounted.current) setPending(false)
+    }
+  }, [router, slug, text])
+
+  useEffect(() => {
+    const consume = () => {
+      const supplied = readArticleCodeLink(window.location.href)
+      if (supplied == null) return
+      // Scrub before making requests, even when the supplied code is invalid.
+      // Replace the current history entry instead of pushing another URL containing the code.
+      window.history.replaceState(null, '', supplied.cleanUrl)
+      void unlock(supplied.code)
+    }
+    consume()
+    window.addEventListener('hashchange', consume)
+    window.addEventListener('popstate', consume)
+    return () => {
+      window.removeEventListener('hashchange', consume)
+      window.removeEventListener('popstate', consume)
+    }
+  }, [unlock, searchParams])
 
   return (
     <section className="mx-auto w-full max-w-3xl px-6 py-6">
       <h1 className="mb-8 text-center font-semibold text-3xl">{title}</h1>
       <form className="mx-auto max-w-md space-y-4 rounded-xl border bg-background/90 p-6"
-        onSubmit={async event => {
+        aria-busy={pending}
+        onSubmit={event => {
           event.preventDefault()
-          if (pending) return
-          setPending(true)
-          setMessage('')
-          try {
-            const response = await fetch(`/api/blog/${encodeURIComponent(slug)}/unlock`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ code }), cache: 'no-store',
-            })
-            if (!response.ok) {
-              setMessage(response.status === 429 ? text.wait : response.status === 403 ? text.wrong : text.error)
-              return
-            }
-            setCode('')
-            router.refresh()
-          } catch {
-            setMessage(text.error)
-          } finally {
-            setPending(false)
-          }
+          void unlock(code)
         }}>
         <p>{text.prompt}</p>
         <label htmlFor="article-unlock-code" className="block text-sm">{text.label}</label>

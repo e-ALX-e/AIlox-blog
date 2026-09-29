@@ -1,11 +1,11 @@
-/* The shell never measures either page: page changes cannot resize it. */
+/* Independent, fixed-size shells. Surface changes never animate width or height. */
 .panel {
   position: relative;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  width: min(19rem, calc(100vw - 2rem));
-  height: min(33rem, calc(100dvh - 2rem), var(--available-height, 100dvh));
+  width: min(19rem, calc(100vw - 2rem), var(--available-width, 100vw));
+  height: min(31rem, calc(100dvh - 2rem), var(--available-height, 100dvh));
   min-height: 0;
   max-height: calc(100dvh - 2rem);
   overflow: hidden;
@@ -15,6 +15,17 @@
   background: var(--background);
   color: var(--foreground);
   box-shadow: 0 10px 25px rgb(15 23 42 / 0.12), 0 2px 5px rgb(15 23 42 / 0.08);
+  outline: none;
+  transition: opacity 150ms ease-out;
+}
+
+.panel[data-menu="time"] {
+  height: min(23rem, calc(100dvh - 2rem), var(--available-height, 100dvh));
+}
+
+.panel[data-starting-style],
+.panel[data-ending-style] {
+  opacity: 0;
 }
 
 :global(.dark) .panel {
@@ -55,11 +66,46 @@
 }
 
 .header,
-.footer,
 .styleBar {
   position: relative;
   z-index: 1;
   flex-shrink: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  height: 2.25rem;
+  padding: 0 0.5rem;
+}
+
+.closeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.closeButton:hover {
+  opacity: 1;
+  background: rgb(128 128 128 / 0.1);
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid var(--theme-ring, #60a5fa);
+  outline-offset: 2px;
 }
 
 .styleBar {
@@ -151,6 +197,72 @@
   background: rgb(255 255 255 / 0.04);
 }
 
+/* Default vertical dock: time above settings, clear of the middle reading bar. */
+.orb {
+  --orb-rgb: 59 130 246;
+  --orb-edge: 186 230 253;
+  position: fixed;
+  right: calc(28px + env(safe-area-inset-right, 0px));
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  z-index: 100;
+  width: 48px;
+  height: 48px;
+  touch-action: none;
+  user-select: none;
+}
+
+.orb[data-floating-menu="time"] {
+  --orb-rgb: 139 92 246;
+  --orb-edge: 221 214 254;
+  bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+}
+
+.orb .orbButton {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  overflow: hidden;
+  cursor: grab;
+  border-color: rgb(var(--orb-edge) / 0.75);
+  box-shadow: 0 8px 22px rgb(var(--orb-rgb) / 0.32);
+}
+
+.orb .orbButton:active {
+  cursor: grabbing;
+}
+
+.orb .orbButton[aria-expanded="true"] {
+  cursor: pointer;
+}
+
+:global(.dark) .orb .orbButton {
+  border-color: rgb(var(--orb-edge) / 0.3);
+  box-shadow: 0 0 18px rgb(var(--orb-rgb) / 0.2), 0 10px 24px rgb(0 0 0 / 0.42);
+}
+
+.orbRing {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgb(var(--orb-edge) / 0.75);
+  pointer-events: none;
+}
+
+.dragBounds {
+  position: fixed;
+  top: calc(20px + env(safe-area-inset-top, 0px));
+  right: calc(16px + env(safe-area-inset-right, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  left: calc(16px + env(safe-area-inset-left, 0px));
+  pointer-events: none;
+}
+
+.positioner {
+  isolation: isolate;
+  z-index: 110;
+  outline: none;
+}
+
 /* Keep text readable when backdrop blur is unavailable or unwanted. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .panel[data-surface="glass"] {
@@ -175,11 +287,19 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .styleButton {
+  .styleButton,
+  .panel {
     transition: none;
   }
 }
 
-.clockPage {
-  align-content: safe center;
+/* On phones the reading bar is nearly full-width. Leave a separate row for it. */
+@media (max-width: 480px) {
+  .orb {
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .orb[data-floating-menu="time"] {
+    bottom: calc(160px + env(safe-area-inset-bottom, 0px));
+  }
 }

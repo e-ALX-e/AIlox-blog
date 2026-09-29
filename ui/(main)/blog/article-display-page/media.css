@@ -63,3 +63,49 @@ html.dark .markdown-content .md-image-frame {
     transition-duration: 1ms;
   }
 }
+
+/* Contain floats inside the article/preview, away from comments and footer. */
+.markdown-content {
+  display: flow-root;
+}
+
+.markdown-content .md-image-frame.md-image-float {
+  width: var(--md-image-width, 120px);
+  /* Also works in a narrow split-pane editor, not just a narrow viewport. */
+  max-width: 40%;
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
+.markdown-content .md-image-float-right {
+  float: right;
+  margin-right: 0;
+  margin-left: 1.25rem;
+}
+
+.markdown-content .md-image-float-left {
+  float: left;
+  margin-right: 1.25rem;
+  margin-left: 0;
+}
+
+.markdown-content .md-image-frame.md-image-frameless,
+html.dark .markdown-content .md-image-frame.md-image-frameless {
+  --md-image-frame-padding: 0;
+  --md-image-radius: 0;
+  padding: 0;
+  border-radius: 0;
+  background-color: transparent;
+}
+
+.markdown-content .md-image-float + :is(h1, h2, h3, h4, h5, h6, p) {
+  margin-top: 0;
+}
+
+/* A normal Markdown separator ends wrapping; wide media stays full-width. */
+.markdown-content hr,
+.markdown-content pre,
+.markdown-content table,
+.markdown-content .md-image-frame:not(.md-image-float) {
+  clear: both;
+}

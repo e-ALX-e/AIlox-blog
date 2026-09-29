@@ -1,48 +1,51 @@
 export type MarkdownImageSize = {
   alt: string
   width?: string
+  float?: 'left' | 'right' | 'none'
+  frame?: 'none' | 'default'
 }
 
-export const parseMarkdownImageSize = (
-  altValue: unknown,
-): MarkdownImageSize => {
-  const alt = typeof altValue === 'string' ? altValue : ''
+function parseWidth(value: string): string | undefined {
+  const match = value.match(/^(\d{1,4})(%|px)$/i)
+  if (match == null) return undefined
 
-  // 支持：
-  // 图片说明|70%
-  // 图片说明|600px
-  const match = alt.match(/^(.*)\|(\d{1,4}%|\d{1,4}px)$/i)
+  const number = Number(match[1])
+  const unit = match[2].toLowerCase()
+  const valid = unit === '%' ? number >= 10 && number <= 100 : number >= 64 && number <= 2000
 
-  if (match == null) {
-    return { alt }
-  }
+  return valid ? `${number}${unit}` : undefined
+}
 
-  const cleanAlt = match[1].trim()
-  const rawWidth = match[2].toLowerCase()
+/**
+ * Only consume a trailing sequence of known, validated layout options.
+ * Existing alt text (including pipes) and the original |80% / |600px syntax
+ * remain supported. Never turn arbitrary Markdown text into CSS.
+ * Example: ![Photo|120px|float=right|frame=none](/media/photo.webp)
+ */
+export const parseMarkdownImageSize = (altValue: unknown): MarkdownImageSize => {
+  const originalAlt = typeof altValue === 'string' ? altValue : ''
+  const parts = originalAlt.split('|')
+  const result: MarkdownImageSize = { alt: originalAlt }
+  let consumed = false
 
-  if (rawWidth.endsWith('%')) {
-    const value = Number.parseInt(rawWidth, 10)
+  while (parts.length > 1) {
+    const option = parts[parts.length - 1].trim().toLowerCase()
+    const width = parseWidth(option.startsWith('width=') ? option.slice(6) : option)
 
-    // 限制 10% ~ 100%
-    if (value < 10 || value > 100) {
-      return { alt }
+    if (width != null) {
+      result.width ??= width
+    } else if (/^float=(left|right|none)$/.test(option)) {
+      result.float ??= option.slice(6) as 'left' | 'right' | 'none'
+    } else if (/^frame=(none|default)$/.test(option)) {
+      result.frame ??= option.slice(6) as 'none' | 'default'
+    } else {
+      break
     }
 
-    return {
-      alt: cleanAlt,
-      width: `${value}%`,
-    }
+    consumed = true
+    parts.pop()
   }
 
-  const value = Number.parseInt(rawWidth, 10)
-
-  // px 限制一下，避免误输入
-  if (value < 64 || value > 2000) {
-    return { alt }
-  }
-
-  return {
-    alt: cleanAlt,
-    width: `${value}px`,
-  }
+  if (consumed) result.alt = parts.join('|').trim()
+  return result
 }

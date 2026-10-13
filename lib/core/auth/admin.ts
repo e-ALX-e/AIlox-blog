@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { isAddress } from 'viem'
+import { isSiteAdminEmail } from '@/config/auth/site-admins'
 import { serverEnv } from '@/config/env/server-env'
 
 export const isWalletSessionUser = (
@@ -23,5 +24,7 @@ export const isAdminUser = (user?: { name?: string | null; email?: string | null
     return user.name?.toLowerCase() === serverEnv.ADMIN_WALLET_ADDRESS
   }
 
-  return serverEnv.ADMIN_EMAILS.includes(user.email.toLowerCase())
+  const email = user.email.toLowerCase()
+  // Extend the existing environment allowlist; do not replace current admins.
+  return serverEnv.ADMIN_EMAILS.includes(email) || isSiteAdminEmail(serverEnv.SITE_URL, email)
 }

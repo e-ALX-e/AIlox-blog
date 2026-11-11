@@ -1,0 +1,214 @@
+/* Design pass follows unslop by Damir Sokolovsky, https://heydamir.design/unslop (CC BY 4.0). */
+.page {
+  --status-bg: #fafafa;
+  --status-ink: #262626;
+  --status-secondary: #525252;
+  --status-muted: #737373;
+  --status-accent: #333333;
+  --status-hover: #171717;
+  --status-line: #e5e5e5;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100svh;
+  margin: 0;
+  padding: 0 48px;
+  color: var(--status-ink);
+  background: var(--status-bg);
+  font-family: Inter, "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.page *,
+.page *::before,
+.page *::after {
+  box-sizing: border-box;
+}
+.page a {
+  color: inherit;
+  text-decoration: none;
+}
+.header {
+  display: flex;
+  align-items: center;
+  width: min(100%, 1120px);
+  min-height: 96px;
+  margin: 0 auto;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 20px;
+  font-weight: 600;
+}
+.brand svg {
+  width: 28px;
+  height: 28px;
+  color: var(--status-accent);
+}
+.content {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: 48px;
+  flex: 1;
+  width: min(100%, 1040px);
+  margin: 0 auto;
+  padding: 48px 0 64px;
+}
+.copy {
+  min-width: 0;
+}
+.code {
+  margin: 0 0 12px;
+  color: var(--status-accent);
+  font-size: clamp(80px, 9vw, 112px);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.label {
+  margin: 0 0 24px;
+  color: var(--status-muted);
+  font-size: 14px;
+  line-height: 20px;
+}
+.title {
+  margin: 0 0 16px;
+  color: var(--status-ink);
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-wrap: balance;
+}
+.description {
+  max-width: 360px;
+  margin: 0;
+  color: var(--status-secondary);
+  font-size: 15px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 32px;
+}
+.page .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 12px 20px;
+  border: 1px solid var(--status-line);
+  border-radius: 8px;
+  color: var(--status-ink);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  cursor: pointer;
+  transition:
+    color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.page .button:hover {
+  background: var(--status-line);
+}
+.page .primary {
+  border-color: var(--status-accent);
+  color: #fff;
+  background: var(--status-accent);
+}
+.page .primary:hover {
+  border-color: var(--status-hover);
+  background: var(--status-hover);
+}
+.page a:focus-visible,
+.page button:focus-visible {
+  outline: 3px solid var(--status-accent);
+  outline-offset: 4px;
+}
+.art {
+  display: grid;
+  min-width: 0;
+  align-items: center;
+  justify-items: center;
+}
+.illustration {
+  display: block;
+  width: 100%;
+  max-height: 456px;
+  overflow: hidden;
+}
+.footer {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: 24px 0;
+  border-top: 1px solid var(--status-line);
+  color: var(--status-muted);
+  font-size: 12px;
+  line-height: 20px;
+}
+.page [hidden] {
+  display: none;
+}
+:global(.dark) .page {
+  --status-bg: #141414;
+  --status-ink: #ededed;
+  --status-secondary: #bdbdbd;
+  --status-muted: #a3a3a3;
+  --status-accent: #e5e5e5;
+  --status-hover: #ffffff;
+  --status-line: #333333;
+}
+:global(.dark) .page .primary {
+  color: #141414;
+}
+@media (max-width: 760px) {
+  .page {
+    padding: 0 24px;
+  }
+  .header {
+    min-height: 80px;
+  }
+  .brand {
+    font-size: 18px;
+  }
+  .content {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+    padding: 32px 0 40px;
+  }
+  .code {
+    font-size: 80px;
+  }
+  .label {
+    margin-bottom: 20px;
+  }
+  .title {
+    font-size: 28px;
+  }
+  .art {
+    width: min(100%, 400px);
+    margin: 0 auto;
+  }
+  .illustration {
+    max-height: 300px;
+  }
+  .footer {
+    padding: 20px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page .button {
+    transition: none;
+  }
+}

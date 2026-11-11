@@ -1,0 +1,158 @@
+// Delivery encoding only: original PNG artwork is retained. FFmpeg is needed
+// when regenerating assets; normal builds only validate the committed files.
+
+import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { readdir, readFile, unlink, writeFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const imageDirectory = new URL('../public/status-illustrations/', import.meta.url)
+const publicPrefix = '/status-illustrations/'
+const sourceModule = new URL('../lib/common/status-image-sources.ts', import.meta.url)
+const themeTemplate = null
+const manifestFile = new URL('optimized-assets.json', imageDirectory)
+const digest = bytes => createHash('sha256').update(bytes).digest('hex')
+
+export async function checkStatusImages() {
+  const manifest = JSON.parse(await readFile(manifestFile, 'utf8'))
+  const pngs = (await readdir(imageDirectory)).filter(name => /^(?:status-)?\d{3}\.png$/.test(name))
+  if (pngs.length !== Object.keys(manifest).length)
+    throw new Error('Regenerate the optimized status images: source list changed')
+  for (const [code, entry] of Object.entries(manifest)) {
+    const stem = /^(?:status-)?\d{3}$/.test(entry.stem) ? entry.stem : ''
+    if (
+      !stem ||
+      !stem.endsWith(code) ||
+      entry.src !== `${publicPrefix}${stem}.${entry.sha256.slice(0, 12)}.webp`
+    )
+      throw new Error(`Invalid status asset: ${code}`)
+    const png = await readFile(new URL(`${stem}.png`, imageDirectory))
+    const webp = await readFile(
+      new URL(`${stem}.${entry.sha256.slice(0, 12)}.webp`, imageDirectory),
+    )
+    if (
+      digest(png) !== entry.sourceSha256 ||
+      digest(webp) !== entry.sha256 ||
+      webp.length !== entry.bytes
+    )
+      throw new Error(`Regenerate the optimized status image: ${code}`)
+    if (webp.toString('ascii', 0, 4) !== 'RIFF' || webp.toString('ascii', 8, 12) !== 'WEBP')
+      throw new Error(`Invalid WebP: ${code}`)
+  }
+  if (sourceModule) {
+    const text = await readFile(sourceModule, 'utf8')
+    const pairs = [...text.matchAll(/["']?(\d{3})["']?\s*:\s*["']([^"']+)["']/g)]
+    if (
+      pairs.length !== Object.keys(manifest).length ||
+      pairs.some(([, code, src]) => manifest[code]?.src !== src)
+    )
+      throw new Error('Regenerate the status image source module')
+  }
+  if (themeTemplate && !(await readFile(themeTemplate, 'utf8')).includes(manifest['500'].src))
+    throw new Error('Update the authentication error illustration')
+  return manifest
+}
+
+async function optimize() {
+  const manifest = {}
+  const files = (await readdir(imageDirectory))
+    .filter(name => /^(?:status-)?\d{3}\.png$/.test(name))
+    .sort()
+  for (const name of files) {
+    const source = new URL(name, imageDirectory)
+    const stem = name.slice(0, -4)
+    const code = stem.slice(-3)
+    const temporary = new URL(`${stem}.encoding.tmp.webp`, imageDirectory)
+    const png = await readFile(source)
+    const width = png.readUInt32BE(16),
+      height = png.readUInt32BE(20)
+    execFileSync('ffmpeg', [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-y',
+      '-i',
+      fileURLToPath(source),
+      '-frames:v',
+      '1',
+      '-c:v',
+      'libwebp',
+      '-lossless',
+      '0',
+      '-q:v',
+      '94',
+      '-compression_level',
+      '6',
+      '-pix_fmt',
+      'bgra',
+      fileURLToPath(temporary),
+    ])
+    const decode = url =>
+      execFileSync(
+        'ffmpeg',
+        [
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-i',
+          fileURLToPath(url),
+          '-frames:v',
+          '1',
+          '-f',
+          'rawvideo',
+          '-pix_fmt',
+          'rgba',
+          'pipe:1',
+        ],
+        { maxBuffer: width * height * 4 + 4096 },
+      )
+    const original = decode(source),
+      encoded = decode(temporary)
+    if (original.length !== encoded.length) throw new Error(`Dimensions changed: ${code}`)
+    for (let offset = 3; offset < original.length; offset += 4) {
+      if (original[offset] !== encoded[offset]) throw new Error(`Transparency changed: ${code}`)
+    }
+    const webp = await readFile(temporary)
+    const sha256 = digest(webp)
+    const filename = `${stem}.${sha256.slice(0, 12)}.webp`
+    await writeFile(new URL(filename, imageDirectory), webp)
+    await unlink(temporary)
+    manifest[code] = {
+      stem,
+      src: `${publicPrefix}${filename}`,
+      width,
+      height,
+      bytes: webp.length,
+      sourceBytes: png.length,
+      sha256,
+      sourceSha256: digest(png),
+    }
+    process.stdout.write(`${code}: ${png.length} -> ${webp.length} bytes; alpha unchanged\n`)
+  }
+  await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`)
+  if (sourceModule) {
+    const sources = Object.fromEntries(
+      Object.entries(manifest).map(([code, entry]) => [code, entry.src]),
+    )
+    await writeFile(
+      sourceModule,
+      `// Generated by the status image encoder. Original PNGs remain the artwork source.\nexport const statusImageSources: Record<number, string> = ${JSON.stringify(sources, null, 2)}\n`,
+    )
+  }
+  if (themeTemplate) {
+    const text = await readFile(themeTemplate, 'utf8')
+    await writeFile(
+      themeTemplate,
+      text.replace(/\/img\/status-500(?:\.[0-9a-f]{12})?\.(?:png|webp)/g, manifest['500'].src),
+    )
+  }
+  await checkStatusImages()
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  if (process.argv.includes('--check')) {
+    await checkStatusImages()
+    process.stdout.write('Optimized status image hashes verified\n')
+  } else await optimize()
+}

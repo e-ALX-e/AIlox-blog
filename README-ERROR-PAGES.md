@@ -9,3 +9,5 @@
 验证使用 `pnpm install --frozen-lockfile`、`pnpm build`、`pnpm ts:check` 和对修改文件运行 Biome。无生产环境配置时，可以使用仓库现有 Dockerfile 中的构建占位变量进行本地编译验证；这些变量只用于构建，不用于生产登录、数据库或存储。
 
 图片及页面随现有应用发布。本次改动不变更部署脚本或基础设施。Cloudflare 与外层代理产生的错误需在对应服务单独接入。
+
+插图使用质量 94 的 WebP 交付版本，透明通道保持一致，PNG 原图保留。404 资源由约 1.18 MB 降至约 244 KB；页面预加载当前插图，并对包含内容摘要的文件名配置一年公开缓存。`prebuild` 校验已提交资源，无需编码器；原图更新后使用 FFmpeg 运行 `node tools/optimize-status-images.mjs`，再格式化生成的 TypeScript 映射。

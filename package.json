@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node tools/optimize-status-images.mjs --check",
     "build": "next build",
     "start": "next start",
     "ts:check": "tsc --noEmit",

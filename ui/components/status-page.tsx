@@ -2,6 +2,7 @@
 
 import { BookOpen } from 'lucide-react'
 import { usePathname } from 'next/navigation'
+import { statusImageSources } from '@/lib/common/status-image-sources'
 import { resolveStatusPage, statusIllustrations } from '@/lib/common/status-pages'
 import { defaultLanguage, isLanguage, type Language } from '@/lib/i18n/config'
 import styles from './status-page.module.css'
@@ -72,6 +73,13 @@ export default function StatusPage({ code, onRetry }: { code: number; onRetry?: 
 
   return (
     <div className={styles.page}>
+      <link
+        rel="preload"
+        as="image"
+        href={statusImageSources[page.illustration]}
+        type="image/webp"
+        fetchPriority="high"
+      />
       <title>{`${page.code} · ${title} · Ailoxi`}</title>
       <header className={styles.header}>
         <a className={styles.brand} href={home}>
@@ -116,7 +124,7 @@ export default function StatusPage({ code, onRetry }: { code: number; onRetry?: 
             focusable="false"
           >
             <image
-              href={`/status-illustrations/${page.illustration}.png`}
+              href={statusImageSources[page.illustration]}
               width={art.width}
               height={art.height}
             />
